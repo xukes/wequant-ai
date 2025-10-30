@@ -1,0 +1,120 @@
+name: Deploy Trading System to Remote Server
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build project
+        run: npm run build
+
+      - name: Install sshpass and rsync
+        run: sudo apt-get update && sudo apt-get install -y sshpass rsync
+
+      - name: Deploy to remote server
+        env:
+          SSH_HOST: ${{ secrets.ALIYUN_SSH_HOST }}
+          SSH_USERNAME: ${{ secrets.ALIYUN_USER_USER }}
+          SSH_PASSWORD: ${{ secrets. ALIYUN_SSH_PASSWORD }}
+          SSH_PORT: ${{ secrets.ALIYUN_SSH_PORT || '22' }}
+          DEPLOY_PATH: ${{ secrets.ALIYUN_DEPLOY_PATH || '/opt/nof1-trading' }}
+        run: |
+          # 同步代码到服务器
+          sshpass -p "$SSH_PASSWORD" rsync -avz --delete \
+            -e "ssh -p $SSH_PORT -o StrictHostKeyChecking=no" \
+            --exclude='.git' \
+            --exclude='node_modules' \
+            --exclude='.env' \
+            --exclude='logs/' \
+            --exclude='*.log' \
+            ./ $SSH_USERNAME@$SSH_HOST:$DEPLOY_PATH/
+
+      - name: Install dependencies and restart service on server
+        env:
+          SSH_HOST: ${{ secrets.ALIYUN_SSH_HOST }}
+          SSH_USERNAME: ${{ secrets.ALIYUN_USER_USER }}
+          SSH_PASSWORD: ${{ secrets.ALIYUN_SSH_PASSWORD }}
+          SSH_PORT: ${{ secrets.ALIYUN_SSH_PORT || '22' }}
+          DEPLOY_PATH: ${{ secrets.ALIYUN_DEPLOY_PATH || '/opt/nof1-trading' }}
+        run: |
+          sshpass -p "$SSH_PASSWORD" ssh -p $SSH_PORT -o StrictHostKeyChecking=no $SSH_USERNAME@$SSH_HOST << 'EOF'
+            cd ${{ env.DEPLOY_PATH }}
+            
+            # 安装依赖
+            npm ci --production
+            
+            # 停止现有服务（如果在运行）
+            if pm2 list | grep -q "open-nof1.ai"; then
+              pm2 stop open-nof1.ai
+              pm2 delete open-nof1.ai
+            fi
+            
+            # 确保.env文件存在并设置端口
+            if [ ! -f .env ]; then
+              echo "PORT=3100" > .env
+              echo "Warning: Created default .env file with PORT=3100. Please add other required environment variables."
+            else
+              # 更新或添加端口配置
+              if grep -q "^PORT=" .env; then
+                sed -i 's/^PORT=.*/PORT=3100/' .env
+              else
+                echo "PORT=3100" >> .env
+              fi
+            fi
+            
+            # 启动服务
+            npm run pm2:start
+            
+            # 显示服务状态
+            pm2 status
+            pm2 logs open-nof1.ai --lines 5
+          EOF
+
+      - name: Health check
+        env:
+          SSH_HOST: ${{ secrets.ALIYUN_SSH_HOST }}
+          SSH_USERNAME: ${{ secrets.ALIYUN_USER_USER }}
+          SSH_PASSWORD: ${{ secrets.ALIYUN_SSH_PASSWORD }}
+          SSH_PORT: ${{ secrets.ALIYUN_SSH_PORT || '22' }}
+        run: |
+          # 等待服务启动
+          sleep 30
+          
+          # 检查服务健康状态
+          sshpass -p "$SSH_PASSWORD" ssh -p $SSH_PORT -o StrictHostKeyChecking=no $SSH_USERNAME@$SSH_HOST << 'EOF'
+            # 检查PM2进程
+            if ! pm2 list | grep -q "open-nof1.ai.*online"; then
+              echo "❌ Trading system is not running properly"
+              pm2 logs open-nof1.ai --lines 20
+              exit 1
+            fi
+            
+            # 检查端口3100监听
+            if ! netstat -tuln | grep -q ":3100"; then
+              echo "❌ Application port 3100 is not listening"
+              exit 1
+            fi
+            
+            echo "✅ Trading system deployed and running successfully on port 3100"
+            echo "🌐 Monitor dashboard: http://localhost:3100/"
+          EOF
+
