@@ -61,6 +61,8 @@ jobs:
             
             # 安装依赖
             npm ci --production
+
+            npm install
             
             # 停止现有服务进程（查找并终止占用3100端口的进程）
             if lsof -ti:3100; then
