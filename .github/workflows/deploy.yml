@@ -48,7 +48,7 @@ jobs:
             --exclude='*.log' \
             ./ $SSH_USERNAME@$SSH_HOST:$DEPLOY_PATH/
 
-            - name: Install dependencies and restart service on server
+      - name: Install dependencies and restart service on server
         env:
           SSH_HOST: ${{ secrets.ALIYUN_SSH_HOST }}
           SSH_USERNAME: ${{ secrets.ALIYUN_USER_USER }}
