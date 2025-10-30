@@ -1,4 +1,54 @@
-      - name: Install dependencies and restart service on server
+name: Deploy Trading System to Remote Server
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build project
+        run: npm run build
+
+      - name: Install sshpass and rsync
+        run: sudo apt-get update && sudo apt-get install -y sshpass rsync
+
+      - name: Deploy to remote server
+        env:
+          SSH_HOST: ${{ secrets.ALIYUN_SSH_HOST }}
+          SSH_USERNAME: ${{ secrets.ALIYUN_USER_USER }}
+          SSH_PASSWORD: ${{ secrets. ALIYUN_SSH_PASSWORD }}
+          SSH_PORT: ${{ secrets.ALIYUN_SSH_PORT || '22' }}
+          DEPLOY_PATH: ${{ secrets.ALIYUN_DEPLOY_PATH || '/opt/nof1-trading' }}
+        run: |
+          # 同步代码到服务器
+          sshpass -p "$SSH_PASSWORD" rsync -avz --delete \
+            -e "ssh -p $SSH_PORT -o StrictHostKeyChecking=no" \
+            --exclude='.git' \
+            --exclude='node_modules' \
+            --exclude='.env' \
+            --exclude='logs/' \
+            --exclude='*.log' \
+            ./ $SSH_USERNAME@$SSH_HOST:$DEPLOY_PATH/
+
+            - name: Install dependencies and restart service on server
         env:
           SSH_HOST: ${{ secrets.ALIYUN_SSH_HOST }}
           SSH_USERNAME: ${{ secrets.ALIYUN_USER_USER }}
@@ -134,3 +184,4 @@
             echo "📊 Recent logs:"
             tail -5 trading.log 2>/dev/null || echo "No recent logs"
           EOF
+
