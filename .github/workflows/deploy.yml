@@ -100,12 +100,14 @@ jobs:
           SSH_USERNAME: ${{ secrets.ALIYUN_USER_USER }}
           SSH_PASSWORD: ${{ secrets.ALIYUN_SSH_PASSWORD }}
           SSH_PORT: ${{ secrets.ALIYUN_SSH_PORT || '22' }}
+          DEPLOY_PATH: ${{ secrets.ALIYUN_DEPLOY_PATH || '/opt/nof1-trading' }}
         run: |
           # 等待服务启动
           sleep 30
           
           # 检查服务健康状态
           sshpass -p "$SSH_PASSWORD" ssh -p $SSH_PORT -o StrictHostKeyChecking=no $SSH_USERNAME@$SSH_HOST << 'EOF'
+            cd $DEPLOY_PATH
             # 检查进程是否存在
             if [ -f trading.pid ]; then
               pid=$(cat trading.pid)
