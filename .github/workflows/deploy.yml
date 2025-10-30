@@ -62,10 +62,10 @@ jobs:
             # 安装依赖
             npm ci --production
             
-            # 停止现有服务（如果在运行）
-            if pm2 list | grep -q "open-nof1.ai"; then
-              pm2 stop open-nof1.ai
-              pm2 delete open-nof1.ai
+            # 停止现有服务进程（查找并终止占用3100端口的进程）
+            if lsof -ti:3100; then
+              echo "Stopping existing service on port 3100..."
+              kill -9 $(lsof -ti:3100) 2>/dev/null || true
             fi
             
             # 确保.env文件存在并设置端口
@@ -81,12 +81,15 @@ jobs:
               fi
             fi
             
-            # 启动服务
-            npm run pm2:start
+            # 启动服务（后台运行）
+            nohup npm run trading:start > trading.log 2>&1 &
             
-            # 显示服务状态
-            pm2 status
-            pm2 logs open-nof1.ai --lines 5
+            # 记录启动的进程ID
+            echo $! > trading.pid
+            echo "Trading system started with PID: $(cat trading.pid)"
+            
+            # 等待服务启动
+            sleep 5
           EOF
 
       - name: Health check
@@ -101,20 +104,32 @@ jobs:
           
           # 检查服务健康状态
           sshpass -p "$SSH_PASSWORD" ssh -p $SSH_PORT -o StrictHostKeyChecking=no $SSH_USERNAME@$SSH_HOST << 'EOF'
-            # 检查PM2进程
-            if ! pm2 list | grep -q "open-nof1.ai.*online"; then
-              echo "❌ Trading system is not running properly"
-              pm2 logs open-nof1.ai --lines 20
+            # 检查进程是否存在
+            if [ -f trading.pid ]; then
+              pid=$(cat trading.pid)
+              if ! ps -p "$pid" > /dev/null 2>&1; then
+                echo "❌ Trading system process is not running"
+                echo "Last 20 lines of log:"
+                tail -20 trading.log 2>/dev/null || echo "No log file found"
+                exit 1
+              fi
+              echo "✅ Trading system process running (PID: $pid)"
+            else
+              echo "❌ Trading system PID file not found"
               exit 1
             fi
             
             # 检查端口3100监听
             if ! netstat -tuln | grep -q ":3100"; then
               echo "❌ Application port 3100 is not listening"
+              echo "Process may still be starting up. Recent logs:"
+              tail -10 trading.log 2>/dev/null || echo "No log file found"
               exit 1
             fi
             
             echo "✅ Trading system deployed and running successfully on port 3100"
             echo "🌐 Monitor dashboard: http://localhost:3100/"
+            echo "📊 Recent logs:"
+            tail -5 trading.log 2>/dev/null || echo "No recent logs"
           EOF
 
