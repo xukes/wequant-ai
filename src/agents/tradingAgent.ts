@@ -42,7 +42,7 @@ export interface AccountRiskConfig {
 export function getAccountRiskConfig(): AccountRiskConfig {
   return {
     stopLossUsdt: Number.parseFloat(process.env.ACCOUNT_STOP_LOSS_USDT || "50"),
-    takeProfitUsdt: Number.parseFloat(process.env.ACCOUNT_TAKE_PROFIT_USDT || "10000"),
+    takeProfitUsdt: Number.parseFloat(process.env.ACCOUNT_TAKE_PROFIT_USDT || "15000"),
     syncOnStartup: process.env.SYNC_CONFIG_ON_STARTUP === "true",
   };
 }

@@ -1178,7 +1178,7 @@ async function executeTradingDecision() {
               const orderStatus = await gateClient.getOrder(order.id?.toString() || "");
               
               if (orderStatus.status === 'finished') {
-                actualExitPrice = Number.parseFloat(orderStatus.fill_price || orderStatus.price || "0");
+                actualExitPrice = Number.parseFloat(orderStatus.fillPrice ||  orderStatus.fill_price || orderStatus.price || "0");
                 actualQuantity = Math.abs(Number.parseFloat(orderStatus.size || "0"));
                 orderFilled = true;
                 

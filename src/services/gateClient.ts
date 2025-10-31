@@ -57,7 +57,7 @@ export class GateClient {
     } else {
       // 正式网地址（默认）
       this.client.basePath = "https://api-testnet.gateapi.io/api/v4";
-      this.client.basePath = "https://api.gateio.ws/api/v4";
+      this.newClient.basePath = "https://api.gateio.ws/api/v4";
     }
     
     this.client.setApiKeySecret(apiKey, apiSecret);
@@ -367,10 +367,7 @@ export class GateClient {
    */
   async getOrder(orderId: string) {
     try {
-      const result = await this.futuresApi.getFuturesOrder(
-        this.settle,
-        orderId
-      );
+      const result = await this.futuresApi.getFuturesOrder(this.settle, orderId);
       return result.body;
     } catch (error) {
       logger.error(`Failed to get order ${orderId} details:`, error as any);
