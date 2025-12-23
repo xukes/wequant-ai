@@ -51,8 +51,8 @@ export class GateClient {
     const isTestnet = process.env.GATE_USE_TESTNET === "true";
     if (isTestnet) {
       // this.client.basePath = "https://api.gateapi.io/api/v4"; 
-       this.client.basePath = "https://api-testnet.gateapi.io/api/v4";
-      this.newClient.basePath = "https://api.gateio.ws/api/v4";
+       this.client.basePath = "http://127.0.0.1:8998/api/v4";
+      this.newClient.basePath = "http://127.0.0.1:8998/api/v4";
       logger.info("Using GATE testnet");
     } else {
       // 正式网地址（默认）

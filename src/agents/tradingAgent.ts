@@ -26,7 +26,7 @@ import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import * as tradingTools from "../tools/trading";
 import { formatChinaTime } from "../utils/timeUtils";
 import { RISK_PARAMS } from "../config/riskParams";
-
+import { createOpenAI } from "@ai-sdk/openai"; 
 /**
  * 账户风险配置
  */
@@ -635,9 +635,16 @@ function generateInstructions(strategy: TradingStrategy, intervalMinutes: number
  * 创建交易 Agent
  */
 export function createTradingAgent(intervalMinutes: number = 5) {
-  const openrouter = createOpenRouter({
-    apiKey: process.env.OPENROUTER_API_KEY || "",
+  // const openrouter = createOpenRouter({
+  //   apiKey: process.env.OPENROUTER_API_KEY || "",
+  // });
+
+
+ const customProvider = createOpenAI({
+    baseURL: process.env.CUSTOM_MODEL_BASE_URL || "http://10.8.0.6:11434/", // 你的私有模型地址
+    apiKey: process.env.CUSTOM_MODEL_API_KEY || "no-key", // 如果需要的话
   });
+
 
   const memory = new Memory({
     storage: new LibSQLMemoryAdapter({
@@ -653,7 +660,7 @@ export function createTradingAgent(intervalMinutes: number = 5) {
   const agent = new Agent({
     name: "trading-agent",
     instructions: generateInstructions(strategy, intervalMinutes),
-    model: openrouter.chat(process.env.AI_MODEL_NAME || "deepseek/deepseek-v3.2-exp"),
+    model: customProvider.chat(process.env.AI_MODEL_NAME || "deepseek/deepseek-v3.2-exp"),
     tools: [
       tradingTools.getMarketPriceTool,
       tradingTools.getTechnicalIndicatorsTool,

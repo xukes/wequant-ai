@@ -25,6 +25,16 @@ import { startAccountRecorder } from "./scheduler/accountRecorder";
 import { initDatabase } from "./database/init";
 import { RISK_PARAMS } from "./config/riskParams";
 
+// 解决 Windows 下控制台输出中文乱码问题
+if (process.platform === "win32") {
+  try {
+    // 尝试将当前终端的代码页切换为 UTF-8 (65001)
+    require("child_process").execSync("chcp 65001", { stdio: "ignore" });
+  } catch (e) {
+    // 如果切换失败则忽略，避免程序崩溃
+  }
+}
+
 // 设置时区为中国时间（Asia/Shanghai，UTC+8）
 process.env.TZ = 'Asia/Shanghai';
 
