@@ -17,9 +17,9 @@
  */
 
 /**
- * GATE.IO API 客户端封装
+ * GATE.IO API Client Wrapper
  */
-// @ts-ignore - gate-api 的类型定义可能不完整
+// @ts-ignore - gate-api type definitions might be incomplete
 import * as GateApi from "gate-api";
 import { createPinoLogger } from "@voltagent/logger";
 import { RISK_PARAMS } from "../config/riskParams";
@@ -37,7 +37,7 @@ export class GateClient {
   
   private readonly newFuturesApi: any;
   private readonly spotApi: any;
-  private readonly settle = "usdt"; // 使用 USDT 结算
+  private readonly settle = "usdt"; // Use USDT settlement
 
   constructor(apiKey: string, apiSecret: string) {
     // @ts-ignore
@@ -47,7 +47,7 @@ export class GateClient {
     this.newClient = new GateApi.ApiClient();
 
     
-    // 根据环境变量决定使用测试网还是正式网
+    // Decide whether to use testnet or mainnet based on environment variables
     const isTestnet = process.env.GATE_USE_TESTNET === "true";
     if (isTestnet) {
       // this.client.basePath = "https://api.gateapi.io/api/v4"; 
@@ -55,7 +55,7 @@ export class GateClient {
       this.newClient.basePath = "http://127.0.0.1:8998/api/v4";
       logger.info("Using GATE testnet");
     } else {
-      // 正式网地址（默认）
+      // Mainnet address (default)
       this.client.basePath = "https://api-testnet.gateapi.io/api/v4";
       this.newClient.basePath = "https://api.gateio.ws/api/v4";
     }
@@ -75,7 +75,7 @@ export class GateClient {
   }
 
   /**
-   * 获取合约ticker价格（带重试机制）
+   * Get futures ticker price (with retry mechanism)
    */
   async getFuturesTicker(contract: string, retries: number = 2) {
     let lastError: any;
@@ -91,7 +91,7 @@ export class GateClient {
         lastError = error;
         if (i < retries) {
           logger.warn(`Failed to get ${contract} price, retry ${i + 1}/${retries}...`);
-          await new Promise(resolve => setTimeout(resolve, 300 * (i + 1))); // 递增延迟
+          await new Promise(resolve => setTimeout(resolve, 300 * (i + 1))); // Incremental delay
         }
       }
     }
@@ -101,7 +101,7 @@ export class GateClient {
   }
 
   /**
-   * 获取合约K线数据（带重试机制）
+   * Get futures candlestick data (with retry mechanism)
    */
   async getFuturesCandles(
     contract: string,
@@ -126,7 +126,7 @@ export class GateClient {
         lastError = error;
         if (i < retries) {
           logger.warn(`Failed to get ${contract} candlestick data, retry ${i + 1}/${retries}...`);
-          await new Promise(resolve => setTimeout(resolve, 300 * (i + 1))); // 递增延迟
+          await new Promise(resolve => setTimeout(resolve, 300 * (i + 1))); // Incremental delay
         }
       }
     }
@@ -136,7 +136,7 @@ export class GateClient {
   }
 
   /**
-   * 获取账户余额（带重试机制）
+   * Get account balance (with retry mechanism)
    */
   async getFuturesAccount(retries: number = 2) {
     let lastError: any;
@@ -149,7 +149,7 @@ export class GateClient {
         lastError = error;
         if (i < retries) {
           logger.warn(`Failed to get account balance, retry ${i + 1}/${retries}...`);
-          await new Promise(resolve => setTimeout(resolve, 300 * (i + 1))); // 递增延迟
+          await new Promise(resolve => setTimeout(resolve, 300 * (i + 1))); // Incremental delay
         }
       }
     }
@@ -159,31 +159,31 @@ export class GateClient {
   }
 
   /**
-   * 获取当前持仓（带重试机制，只返回允许的币种）
-   * 注意：需要指定 position mode 参数
+   * Get current positions (with retry mechanism, only returns allowed symbols)
+   * Note: position mode parameter needs to be specified
    */
   async getPositions(retries: number = 2) {
     let lastError: any;
     
     for (let i = 0; i <= retries; i++) {
       try {
-        // Gate.io API 调用 listPositions
-        // 注意：不传第二个参数表示查询所有模式的持仓
+        // Gate.io API call listPositions
+        // Note: Not passing the second parameter means querying positions in all modes
         const result = await this.futuresApi.listPositions(this.settle);
         const allPositions = result.body;
         
-        // 过滤：只保留允许的币种
+        // Filter: Only keep allowed symbols
         const allowedSymbols = RISK_PARAMS.TRADING_SYMBOLS;
         const filteredPositions = allPositions?.filter((p: any) => {
-          // 从 contract（如 "BTC_USDT"）中提取币种名称（如 "BTC"）
+          // Extract symbol name (e.g., "BTC") from contract (e.g., "BTC_USDT")
           const symbol = p.contract?.split('_')[0];
           return symbol && allowedSymbols.includes(symbol);
         }) || [];
         
-        // 优化日志：只记录关键信息
+        // Optimize logs: Only record key information
         logger.info(`Positions fetched (API returned ${allPositions?.length || 0}, filtered ${filteredPositions.length})`);
         
-        // 只记录有实际持仓（size != 0）的详细信息
+        // Only record detailed information for active positions (size != 0)
         const activePositions = filteredPositions.filter((p: any) => p.size && p.size !== 0);
         if (activePositions.length > 0) {
           logger.info(`Active positions: ${activePositions.map((p: any) => 
@@ -196,7 +196,7 @@ export class GateClient {
         lastError = error;
         if (i < retries) {
           logger.warn(`Failed to get positions, retry ${i + 1}/${retries}...`);
-          await new Promise(resolve => setTimeout(resolve, 300 * (i + 1))); // 递增延迟
+          await new Promise(resolve => setTimeout(resolve, 300 * (i + 1))); // Incremental delay
         }
       }
     }
@@ -206,7 +206,7 @@ export class GateClient {
   }
 
   /**
-   * 下单 - 开仓或平仓
+   * Place Order - Open or Close Position
    */
   async placeOrder(params: {
     contract: string;
@@ -218,25 +218,25 @@ export class GateClient {
     stopLoss?: number;
     takeProfit?: number;
   }) {
-    // 验证并调整数量（在 try 外部定义，以便在 catch 中使用）
+    // Validate and adjust size (defined outside try to be used in catch)
     let adjustedSize = params.size;
     
     try {
-      // 获取合约信息以验证数量
+      // Get contract info to validate size
       const contractInfo = await this.getContractInfo(params.contract);
       
       const absSize = Math.abs(params.size);
       
-      // Gate.io API 的单笔订单数量限制（根据错误信息）
+      // Gate.io API single order size limit (based on error message)
       const API_MAX_SIZE = 10000000;
       
-      // 检查最小数量限制（使用驼峰命名）
+      // Check minimum size limit (using camelCase)
       if (contractInfo.orderSizeMin && absSize < contractInfo.orderSizeMin) {
         logger.warn(`Order size ${absSize} below minimum ${contractInfo.orderSizeMin}, adjusted to minimum`);
         adjustedSize = params.size > 0 ? contractInfo.orderSizeMin : -contractInfo.orderSizeMin;
       }
       
-      // 检查最大数量限制（使用合约限制和 API 限制中的较小值）
+      // Check maximum size limit (use smaller of contract limit and API limit)
       const maxSize = contractInfo.orderSizeMax 
         ? Math.min(contractInfo.orderSizeMax, API_MAX_SIZE)
         : API_MAX_SIZE;
@@ -246,24 +246,24 @@ export class GateClient {
         adjustedSize = params.size > 0 ? maxSize : -maxSize;
       }
 
-      // 验证价格偏离（针对限价单）
+      // Validate price deviation (for limit orders)
       let adjustedPrice = params.price;
       if (params.price && params.price > 0) {
-        // 获取当前标记价格
+        // Get current mark price
         const ticker = await this.getFuturesTicker(params.contract);
         const markPrice = Number.parseFloat(ticker.markPrice || ticker.last || "0");
         
         if (markPrice > 0) {
           const priceDeviation = Math.abs(params.price - markPrice) / markPrice;
-          const maxDeviation = 0.015; // 1.5% 限制，留一些缓冲空间（API限制是2%）
+          const maxDeviation = 0.015; // 1.5% limit, leave some buffer (API limit is 2%)
           
           if (priceDeviation > maxDeviation) {
-            // 调整价格到允许范围内（留0.5%缓冲）
+            // Adjust price to allowed range (leave 0.5% buffer)
             if (params.size > 0) {
-              // 买入订单：价格不能太高
+              // Buy order: price cannot be too high
               adjustedPrice = markPrice * (1 + maxDeviation);
             } else {
-              // 卖出订单：价格不能太低
+              // Sell order: price cannot be too low
               adjustedPrice = markPrice * (1 - maxDeviation);
             }
             logger.warn(
@@ -273,19 +273,19 @@ export class GateClient {
         }
       }
 
-      // 格式化价格，确保不超过精度限制
-      // Gate.io API 要求价格精度不超过 12 位小数
-      // 注意：price: "0" 表示市价单
+      // Format price, ensure precision limit is not exceeded
+      // Gate.io API requires price precision not to exceed 12 decimal places
+      // Note: price: "0" means market order
       const formatPrice = (price: number | undefined): string => {
-        if (!price || price === 0) return "0";  // 市价单
+        if (!price || price === 0) return "0";  // Market order
         
-        // 先四舍五入到 8 位小数，避免浮点数精度问题
+        // Round to 8 decimal places first to avoid floating point precision issues
         const roundedPrice = Math.round(price * 100000000) / 100000000;
         
-        // 转为字符串
+        // Convert to string
         let priceStr = roundedPrice.toString();
         
-        // 如果包含小数点，移除末尾的零
+        // If contains decimal point, remove trailing zeros
         if (priceStr.includes('.')) {
           priceStr = priceStr.replace(/\.?0+$/, "");
         }
@@ -293,37 +293,37 @@ export class GateClient {
         return priceStr;
       };
 
-      // 使用 FuturesOrder 类型的结构
-      // 注意：gate-api SDK 使用驼峰命名，会自动转换为下划线命名
+      // Use FuturesOrder type structure
+      // Note: gate-api SDK uses camelCase, automatically converts to snake_case
       const order: any = {
         contract: params.contract,
         size: adjustedSize,
-        price: formatPrice(adjustedPrice), // 市价单传 "0"
+        price: formatPrice(adjustedPrice), // Market order pass "0"
       };
       
-      // 根据订单类型设置 tif
+      // Set tif based on order type
       const formattedPrice = formatPrice(adjustedPrice);
       if (formattedPrice !== "0") {
-        // 限价单：设置 tif 为 GTC（Good Till Cancel）
+        // Limit order: set tif to GTC (Good Till Cancel)
         order.tif = params.tif || "gtc";
       } else {
-        // 市价单：必须设置 IOC（Immediate or Cancel）或 FOK（Fill or Kill）
-        // Gate.io API 要求市价单必须指定 IOC 或 FOK
-        order.tif = "ioc"; // 立即成交或取消
+        // Market order: must set IOC (Immediate or Cancel) or FOK (Fill or Kill)
+        // Gate.io API requires market orders to specify IOC or FOK
+        order.tif = "ioc"; // Immediate or Cancel
       }
 
-      // Gate API SDK 使用驼峰命名：isReduceOnly -> is_reduce_only, isClose -> is_close
+      // Gate API SDK uses camelCase: isReduceOnly -> is_reduce_only, isClose -> is_close
       if (params.reduceOnly === true) {
         order.isReduceOnly = true;
         order.isClose = true;
       }
 
-      // 驼峰命名：autoSize -> auto_size
+      // camelCase: autoSize -> auto_size
       if (params.autoSize !== undefined) {
         order.autoSize = params.autoSize;
       }
 
-      // 止盈止损参数（如果有提供）
+      // Stop loss and take profit parameters (if provided)
       if (params.stopLoss !== undefined && params.stopLoss > 0) {
         order.stopLoss = params.stopLoss.toString();
         logger.info(`Stop loss set: ${params.stopLoss}`);
@@ -341,7 +341,7 @@ export class GateClient {
       );
       return result.body;
     } catch (error: any) {
-      // 获取详细的 API 错误信息
+      // Get detailed API error information
       const errorDetails = {
         message: error.message,
         status: error.response?.status,
@@ -350,20 +350,20 @@ export class GateClient {
       };
       logger.error("Order failed:", errorDetails);
       
-      // 特殊处理资金不足的情况
+      // Special handling for insufficient funds
       if (errorDetails.apiError?.label === "INSUFFICIENT_AVAILABLE") {
         const msg = errorDetails.apiError.message || "Insufficient available margin";
         throw new Error(`Insufficient funds to open position ${params.contract}: ${msg}`);
       }
       
-      // 抛出更详细的错误信息
+      // Throw more detailed error message
       const detailedMessage = errorDetails.apiError?.message || errorDetails.apiError?.label || error.message;
       throw new Error(`Order failed: ${detailedMessage} (${params.contract}, size: ${adjustedSize})`);
     }
   }
 
   /**
-   * 获取订单详情
+   * Get order details
    */
   async getOrder(orderId: string) {
     try {
@@ -376,7 +376,7 @@ export class GateClient {
   }
 
   /**
-   * 取消订单
+   * Cancel order
    */
   async cancelOrder(orderId: string) {
     try {
@@ -392,7 +392,7 @@ export class GateClient {
   }
 
   /**
-   * 获取未成交订单
+   * Get open orders
    */
   async getOpenOrders(contract?: string) {
     try {
@@ -407,7 +407,7 @@ export class GateClient {
   }
 
   /**
-   * 设置仓位杠杆
+   * Set position leverage
    */
   async setLeverage(contract: string, leverage: number) {
     try {
@@ -419,15 +419,15 @@ export class GateClient {
       );
       return result.body;
     } catch (error: any) {
-      // 如果已有持仓，某些交易所不允许修改杠杆，这是正常的
-      // 记录警告但不抛出错误，让交易继续
+      // If there are existing positions, some exchanges do not allow leverage modification, this is normal
+      // Log warning but do not throw error, allow trading to continue
       logger.warn(`Failed to set ${contract} leverage (might have existing positions):`, error.message);
       return null;
     }
   }
 
   /**
-   * 获取资金费率
+   * Get funding rate
    */
   async getFundingRate(contract: string) {
     try {
@@ -444,7 +444,7 @@ export class GateClient {
   }
 
   /**
-   * 获取合约信息（包含持仓量等）
+   * Get contract info (including open interest, etc.)
    */
   async getContractInfo(contract: string) {
     try {
@@ -460,7 +460,7 @@ export class GateClient {
   }
 
   /**
-   * 获取订单簿
+   * Get order book
    */
   async getOrderBook(contract: string, limit: number = 10) {
     try {
@@ -477,10 +477,10 @@ export class GateClient {
   }
 
   /**
-   * 获取历史成交记录（我的成交）
-   * 用于分析最近的交易历史和盈亏情况
-   * @param contract 合约名称（可选，不传则获取所有合约）
-   * @param limit 返回数量，默认10条
+   * Get historical trade records (my trades)
+   * For analyzing recent trading history and profit and loss
+   * @param contract Contract name (optional, leave blank to get all contracts)
+   * @param limit Number of records to return, default 10
    */
   async getMyTrades(contract?: string, limit: number = 10) {
     try {
@@ -489,8 +489,8 @@ export class GateClient {
         options.contract = contract;
       }
       
-      // Gate.io API: 使用 getMyFuturesTrades 方法
-      // 注意：SDK 方法名可能是 getMyFuturesTrades 而不是 listMyTrades
+      // Gate.io API: use getMyFuturesTrades method
+      // Note: SDK method name might be getMyFuturesTrades instead of listMyTrades
       const result = await this.futuresApi.getMyFuturesTrades(
         this.settle,
         options
@@ -503,10 +503,10 @@ export class GateClient {
   }
 
   /**
-   * 获取历史仓位记录（已平仓的仓位结算记录）
-   * @param contract 合约名称（可选，不传则获取所有合约）
-   * @param limit 返回数量，默认100条
-   * @param offset 偏移量，默认0，用于分页
+   * Get historical position records (settlement records of closed positions)
+   * @param contract Contract name (optional, leave blank to get all contracts)
+   * @param limit Number of records to return, default 100
+   * @param offset Offset, default 0, for pagination
    */
   async getPositionHistory(contract?: string, limit: number = 100, offset: number = 0) {
     try {
@@ -515,8 +515,8 @@ export class GateClient {
         options.contract = contract;
       }
       
-      // Gate.io API: 使用 listFuturesLiquidatedOrders 方法获取已清算仓位
-      // 注意：这个方法返回的是已清算（平仓）的仓位历史
+      // Gate.io API: use listFuturesLiquidatedOrders method to get liquidated positions
+      // Note: this method returns the history of liquidated (closed) positions
       const result = await this.futuresApi.listFuturesLiquidatedOrders(
         this.settle,
         options
@@ -529,10 +529,10 @@ export class GateClient {
   }
 
   /**
-   * 获取历史结算记录（更详细的历史仓位信息）
-   * @param contract 合约名称（可选，不传则获取所有合约）
-   * @param limit 返回数量，默认100条
-   * @param offset 偏移量，默认0，用于分页
+   * Get historical settlement records (more detailed historical position information)
+   * @param contract Contract name (optional, leave blank to get all contracts)
+   * @param limit Number of records to return, default 100
+   * @param offset Offset, default 0, for pagination
    */
   async getSettlementHistory(contract?: string, limit: number = 100, offset: number = 0) {
     try {
@@ -541,7 +541,7 @@ export class GateClient {
         options.contract = contract;
       }
       
-      // Gate.io API: 使用 listFuturesSettlementHistory 方法获取结算历史
+      // Gate.io API: use listFuturesSettlementHistory method to get settlement history
       const result = await this.futuresApi.listFuturesSettlementHistory(
         this.settle,
         options
@@ -554,9 +554,9 @@ export class GateClient {
   }
 
   /**
-   * 获取已完成的订单历史
-   * @param contract 合约名称（可选）
-   * @param limit 返回数量，默认10条
+   * Get completed order history
+   * @param contract Contract name (optional)
+   * @param limit Number of records to return, default 10
    */
   async getOrderHistory(contract?: string, limit: number = 10) {
     try {
@@ -579,15 +579,15 @@ export class GateClient {
 }
 
 /**
- * 全局 GATE 客户端实例（单例模式）
+ * Global GATE client instance (Singleton pattern)
  */
 let gateClientInstance: GateClient | null = null;
 
 /**
- * 创建全局 GATE 客户端实例（单例模式）
+ * Create global GATE client instance (Singleton pattern)
  */
 export function createGateClient(): GateClient {
-  // 如果已存在实例，直接返回
+  // If instance already exists, return it directly
   if (gateClientInstance) {
     return gateClientInstance;
   }
@@ -596,10 +596,10 @@ export function createGateClient(): GateClient {
   const apiSecret = process.env.GATE_API_SECRET;
 
   if (!apiKey || !apiSecret) {
-    throw new Error("GATE_API_KEY 和 GATE_API_SECRET 必须在环境变量中设置");
+    throw new Error("GATE_API_KEY and GATE_API_SECRET must be set in environment variables");
   }
 
-  // 创建并缓存实例
+  // Create and cache instance
   gateClientInstance = new GateClient(apiKey, apiSecret);
   return gateClientInstance;
 }

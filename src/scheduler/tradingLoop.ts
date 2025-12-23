@@ -72,7 +72,7 @@ function ensureRange(value: number, min: number, max: number, defaultValue?: num
  * Collect all market data (including multi-timeframe analysis and time series data)
  * 🔥 Optimization: Added data validation and error handling, returning time series data for prompts
  */
-async function collectMarketData() {
+async function collectMarketData()  {
   const gateClient = createGateClient();
   const marketData: Record<string, any> = {};
 
@@ -1149,12 +1149,12 @@ async function executeTradingDecision() {
       
       // 执行强制平仓
       if (shouldClose) {
-        logger.warn(`【强制平仓】${symbol} ${side} - ${closeReason}`);
+        logger.warn(`[Forced Close] ${symbol} ${side} - ${closeReason}`);
         try {
           const contract = `${symbol}_USDT`;
           const size = side === 'long' ? -pos.quantity : pos.quantity;
           
-          // 1. 执行平仓订单
+          // 1. Place close order
           const order = await gateClient.placeOrder({
             contract,
             size,
@@ -1162,9 +1162,9 @@ async function executeTradingDecision() {
             reduceOnly: true,
           });
           
-          logger.info(`✅ 已下达强制平仓订单 ${symbol}，订单ID: ${order.id}`);
+          logger.info(`✅ Forced close order placed for ${symbol}, Order ID: ${order.id}`);
           
-          // 2. 等待订单完成并获取成交信息（最多重试5次）
+          // 2. Wait for order completion and get fill info (max 5 retries)
           let actualExitPrice = 0;
           let actualQuantity = Math.abs(pos.quantity);
           let pnl = 0;
@@ -1182,16 +1182,16 @@ async function executeTradingDecision() {
                 actualQuantity = Math.abs(Number.parseFloat(orderStatus.size || "0"));
                 orderFilled = true;
                 
-                // 获取合约乘数
+                // Get contract multiplier
                 let quantoMultiplier = 0.01;
                 try {
                   const contractInfo = await gateClient.getContractInfo(contract);
                   quantoMultiplier = Number.parseFloat(contractInfo.quantoMultiplier || "0.01");
                 } catch (err) {
-                  logger.warn(`获取合约信息失败，使用默认乘数 0.01`);
+                  logger.warn(`Failed to get contract info, using default multiplier 0.01`);
                 }
                 
-                // 计算盈亏
+                // Calculate PnL
                 const entryPrice = pos.entry_price;
                 const priceChange = side === "long" 
                   ? (actualExitPrice - entryPrice) 

@@ -639,10 +639,16 @@ export function createTradingAgent(intervalMinutes: number = 5) {
   //   apiKey: process.env.OPENROUTER_API_KEY || "",
   // });
 
+  const baseURL = process.env.CUSTOM_MODEL_BASE_URL || "http://localhost:11434/v1";
+  const apiKey = process.env.CUSTOM_MODEL_API_KEY || "no-key";
+  const modelName = process.env.AI_MODEL_NAME || "deepseek/deepseek-v3.2-exp";
+
+  logger.info(`Initializing AI Model Provider: ${baseURL}`);
+  logger.info(`Using Model: ${modelName}`);
 
  const customProvider = createOpenAI({
-    baseURL: process.env.CUSTOM_MODEL_BASE_URL || "http://10.8.0.6:11434/", // 你的私有模型地址
-    apiKey: process.env.CUSTOM_MODEL_API_KEY || "no-key", // 如果需要的话
+    baseURL: baseURL,
+    apiKey: apiKey,
   });
 
 
@@ -660,7 +666,7 @@ export function createTradingAgent(intervalMinutes: number = 5) {
   const agent = new Agent({
     name: "trading-agent",
     instructions: generateInstructions(strategy, intervalMinutes),
-    model: customProvider.chat(process.env.AI_MODEL_NAME || "deepseek/deepseek-v3.2-exp"),
+    model: customProvider.chat(modelName),
     tools: [
       tradingTools.getMarketPriceTool,
       tradingTools.getTechnicalIndicatorsTool,
