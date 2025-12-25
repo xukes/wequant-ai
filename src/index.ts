@@ -1,21 +1,4 @@
-/**
- * open-nof1.ai - AI 加密货币自动交易系统
- * Copyright (C) 2025 195440
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program. If not, see <https://www.gnu.org/licenses/>.
- */
-
+import "./utils/fix-console";
 import "dotenv/config";
 import { createPinoLogger } from "@voltagent/logger";
 import { serve } from "@hono/node-server";
@@ -24,16 +7,6 @@ import { startTradingLoop, initTradingSystem } from "./scheduler/tradingLoop";
 import { startAccountRecorder } from "./scheduler/accountRecorder";
 import { initDatabase } from "./database/init";
 import { RISK_PARAMS } from "./config/riskParams";
-
-// 解决 Windows 下控制台输出中文乱码问题
-if (process.platform === "win32") {
-  try {
-    // 尝试将当前终端的代码页切换为 UTF-8 (65001)
-    require("child_process").execSync("chcp 65001", { stdio: "ignore" });
-  } catch (e) {
-    // 如果切换失败则忽略，避免程序崩溃
-  }
-}
 
 // 设置时区为中国时间（Asia/Shanghai，UTC+8）
 process.env.TZ = 'Asia/Shanghai';

@@ -31,7 +31,7 @@
     "typecheck": "tsc --noEmit",
     "volt": "volt",
     "setup": "bash scripts/setup.sh",
-    "trading:start": "tsx --env-file=.env ./src",
+    "trading:start": "node scripts/run-with-utf8.js tsx --env-file=.env ./src",
     "trading:stop": "sh scripts/kill-port.sh",
     "trading:restart": "npm run trading:stop && npm run trading:start",
     "db:init": "bash scripts/init-db.sh",
