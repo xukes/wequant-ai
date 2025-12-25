@@ -70,11 +70,10 @@ export function createApiRoutes() {
       const initialBalance = initialResult.rows[0]
         ? Number.parseFloat(initialResult.rows[0].total_value as string)
         : 100;
-      
-      // Gate.io 的 account.total 包含了未实现盈亏
-      // 总资产 = total - unrealisedPnl = available + positionMargin
+    
+      // 总资产 = total
       const unrealisedPnl = Number.parseFloat(account.unrealisedPnl || "0");
-      const totalBalance = Number.parseFloat(account.total || "0") - unrealisedPnl;
+      const totalBalance = Number.parseFloat(account.total || "0");
       
       // 收益率 = (总资产 - 初始资金) / 初始资金 * 100
       // 总资产不包含未实现盈亏，收益率反映已实现盈亏

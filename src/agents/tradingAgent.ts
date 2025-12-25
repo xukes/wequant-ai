@@ -635,21 +635,21 @@ function generateInstructions(strategy: TradingStrategy, intervalMinutes: number
  * 创建交易 Agent
  */
 export function createTradingAgent(intervalMinutes: number = 5) {
-  // const openrouter = createOpenRouter({
-  //   apiKey: process.env.OPENROUTER_API_KEY || "",
-  // });
-
-  const baseURL = process.env.CUSTOM_MODEL_BASE_URL || "http://localhost:11434/v1";
-  const apiKey = process.env.CUSTOM_MODEL_API_KEY || "no-key";
-  const modelName = process.env.AI_MODEL_NAME || "deepseek/deepseek-v3.2-exp";
-
-  logger.info(`Initializing AI Model Provider: ${baseURL}`);
-  logger.info(`Using Model: ${modelName}`);
-
- const customProvider = createOpenAI({
-    baseURL: baseURL,
-    apiKey: apiKey,
+  const openrouter = createOpenRouter({
+    apiKey: process.env.OPENROUTER_API_KEY || "",
   });
+
+//   const baseURL = process.env.CUSTOM_MODEL_BASE_URL || "http://localhost:11434/v1";
+//   const apiKey = process.env.CUSTOM_MODEL_API_KEY || "no-key";
+//   const modelName = process.env.AI_MODEL_NAME || "deepseek/deepseek-v3.2-exp";
+
+//   logger.info(`Initializing AI Model Provider: ${baseURL}`);
+//   logger.info(`Using Model: ${modelName}`);
+
+//  const customProvider = createOpenAI({
+//     baseURL: baseURL,
+//     apiKey: apiKey,
+//   });
 
 
   const memory = new Memory({
@@ -666,7 +666,8 @@ export function createTradingAgent(intervalMinutes: number = 5) {
   const agent = new Agent({
     name: "trading-agent",
     instructions: generateInstructions(strategy, intervalMinutes),
-    model: customProvider.chat(modelName),
+    // model: customProvider.chat(modelName),
+    model: openrouter.chat(process.env.AI_MODEL_NAME || "deepseek/deepseek-v3.2-exp"),
     tools: [
       tradingTools.getMarketPriceTool,
       tradingTools.getTechnicalIndicatorsTool,
