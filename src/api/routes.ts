@@ -43,7 +43,8 @@ export function createApiRoutes() {
   });
 
   // New Endpoint: Generate Trading Decision
-  app.post("/api/v1/decision", async (c) => {
+  app.post("/api/decision", async (c) => {
+    logger.info(`Received decision request: ${c.req.method} ${c.req.path}`);
     try {
       const body = await c.req.json();
       
@@ -79,10 +80,9 @@ export function createApiRoutes() {
       // 4. Run Agent
       // Note: You might need to modify tools to NOT execute trades, 
       // but only return analysis if this is a "Signal Only" API.
-      // @ts-ignore
-      const result = await agent.run({
-        messages: [{ role: "user", content: `Analyze ${symbol} based on this context: ${marketContext}` }]
-      });
+      const result = await agent.generateText(
+        [{ role: "user", content: `Analyze ${symbol} based on this context: ${marketContext}` }]
+      );
 
       // 5. Return Structured Decision
       return c.json({
@@ -98,9 +98,7 @@ export function createApiRoutes() {
   });
 
 
-
-  // 静态文件服务 - 需要使用绝对路径
-  app.use("/*", serveStatic({ root: "./public" }));
+  // 静态文件服务已移动到路由末尾，防止拦截 API 请求
 
   /**
    * 获取账户总览
@@ -391,6 +389,24 @@ export function createApiRoutes() {
       return c.json({ error: error.message }, 500);
     }
   });
+
+  // Debug endpoint to check if route is registered
+  app.get("/api/decision", (c) => {
+    return c.json({ 
+      message: "Please use POST method to submit decision request",
+      example_body: {
+        userId: "user_123",
+        symbol: "BTC_USDT",
+        balance: 10000,
+        currentPositions: [],
+        model: "deepseek/deepseek-v3.2-exp",
+        strategy: "balanced"
+      }
+    });
+  });
+
+  // 静态文件服务 - 需要使用绝对路径 (放在最后)
+  app.use("/*", serveStatic({ root: "./public" }));
 
   return app;
 }
