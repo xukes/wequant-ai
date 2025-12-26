@@ -81,6 +81,60 @@ export interface StrategyParams {
   riskTolerance: string;
   tradingStyle: string;
 }
+export interface AgentRequestConfig {
+  userId: string;
+  modelName: string; // e.g., "deepseek/deepseek-v3.2", "gpt-4"
+  strategy: "conservative" | "balanced" | "aggressive";
+  riskParams: any;
+}
+
+/**
+ * Create an agent instance dynamically based on request context
+ */
+export function createDynamicAgent(config: AgentRequestConfig) {
+  // 1. Dynamic Model Selection
+  const openrouter = createOpenRouter({
+    apiKey: process.env.OPENROUTER_API_KEY || "",
+  });
+  
+  const model = openrouter.chat(config.modelName || "deepseek/deepseek-v3.2-exp");
+
+  // 2. Namespaced Memory
+  const memory = new Memory({
+    storage: new LibSQLMemoryAdapter({
+      url: "file:./.voltagent/trading-memory.db",
+      logger: logger.child({ component: "libsql" }),
+    }),
+    // namespace: `user_${config.userId}`,
+  });
+
+  // 3. Dynamic Instructions
+  // Use the existing generateInstructions to ensure consistency
+  const instructions = generateInstructions(config.strategy, 5);
+
+  return new Agent({
+    name: `trading-agent-${config.userId}`,
+    model,
+    memory,
+    instructions,
+    tools: [
+      tradingTools.getMarketPriceTool,
+      tradingTools.getTechnicalIndicatorsTool,
+      tradingTools.getFundingRateTool,
+      tradingTools.getOrderBookTool,
+      tradingTools.openPositionTool,
+      tradingTools.closePositionTool,
+      tradingTools.cancelOrderTool,
+      tradingTools.getAccountBalanceTool,
+      tradingTools.getPositionsTool,
+      tradingTools.getOpenOrdersTool,
+      tradingTools.checkOrderStatusTool,
+      tradingTools.calculateRiskTool,
+      tradingTools.syncPositionsTool,
+    ],
+  });
+}
+
 
 /**
  * 获取策略参数

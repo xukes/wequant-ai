@@ -24,6 +24,7 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import { createClient } from "@libsql/client";
 import { createGateClient } from "../services/gateClient";
 import { createPinoLogger } from "@voltagent/logger";
+import { createDynamicAgent } from "../agents/tradingAgent";
 
 const logger = createPinoLogger({
   name: "api-routes",
@@ -40,6 +41,63 @@ export function createApiRoutes() {
   app.get("/api/health", (c) => {
     return c.json({ status: "ok" }, 200);
   });
+
+  // New Endpoint: Generate Trading Decision
+  app.post("/api/v1/decision", async (c) => {
+    try {
+      const body = await c.req.json();
+      
+      // 1. Validate Input
+      const { 
+        userId, 
+        symbol, 
+        currentPositions, // Array of positions passed by caller
+        balance,          // Current balance passed by caller
+        model = "deepseek/deepseek-v3.2-exp",
+        strategy = "balanced"
+      } = body;
+
+      if (!userId || !symbol) return c.json({ error: "Missing required fields" }, 400);
+
+      // 2. Initialize Agent for this specific request
+      const agent = createDynamicAgent({
+        userId,
+        modelName: model,
+        strategy,
+        riskParams: {} 
+      });
+
+      // 3. Prepare Context for AI
+      // Instead of the agent fetching account info via API Key, 
+      // we feed the data provided in the request body.
+      const marketContext = `
+        Current Market: ${symbol}
+        User Balance: ${balance}
+        Current Positions: ${JSON.stringify(currentPositions)}
+      `;
+
+      // 4. Run Agent
+      // Note: You might need to modify tools to NOT execute trades, 
+      // but only return analysis if this is a "Signal Only" API.
+      // @ts-ignore
+      const result = await agent.run({
+        messages: [{ role: "user", content: `Analyze ${symbol} based on this context: ${marketContext}` }]
+      });
+
+      // 5. Return Structured Decision
+      return c.json({
+        decision: result.text,
+        action: parseActionFromText(result.text), // Helper to extract BUY/SELL/HOLD
+        timestamp: new Date().toISOString(),
+        model_used: model
+      });
+
+    } catch (error: any) {
+      return c.json({ error: error.message }, 500);
+    }
+  });
+
+
 
   // 静态文件服务 - 需要使用绝对路径
   app.use("/*", serveStatic({ root: "./public" }));
@@ -337,3 +395,10 @@ export function createApiRoutes() {
   return app;
 }
 
+
+function parseActionFromText(text: string) {
+  // Simple logic to extract structured command from AI text
+  if (text.includes("ACTION: BUY")) return "BUY";
+  if (text.includes("ACTION: SELL")) return "SELL";
+  return "HOLD";
+}
