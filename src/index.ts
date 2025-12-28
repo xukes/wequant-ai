@@ -3,10 +3,9 @@ import "dotenv/config";
 import { createPinoLogger } from "@voltagent/logger";
 import { serve } from "@hono/node-server";
 import { createApiRoutes } from "./api/routes";
-import { startTradingLoop, initTradingSystem } from "./scheduler/tradingLoop";
-import { startAccountRecorder } from "./scheduler/accountRecorder";
 import { initDatabase } from "./database/init";
 import { RISK_PARAMS } from "./config/riskParams";
+import { EngineManager } from "./scheduler/EngineManager"; // 引入新的管理器
 
 // 设置时区为中国时间（Asia/Shanghai，UTC+8）
 process.env.TZ = 'Asia/Shanghai';
@@ -41,8 +40,9 @@ async function main() {
   logger.info("Initializing database...");
   await initDatabase();
   
-  // 2. Initialize trading system config (read env and sync to DB)
-  await initTradingSystem();
+  // 2. Initialize Engine Manager (Restore running engines)
+  logger.info("Initializing Engine Manager...");
+  await EngineManager.getInstance().init();
   
   // 3. Start API server
   logger.info("🌐 Starting Web Server...");
@@ -56,22 +56,13 @@ async function main() {
   });
   
   logger.info(`Web server started: http://localhost:${port}`);
-  logger.info(`Monitor dashboard: http://localhost:${port}/`);
-  
-  // 4. Start trading loop
-  logger.info("Starting trading loop...");
-  startTradingLoop();
-  
-  // 5. Start account recorder
-  logger.info("Starting account recorder...");
-  startAccountRecorder();
   
   logger.info("\n" + "=".repeat(80));
   logger.info("System started successfully!");
   logger.info("=".repeat(80));
   logger.info(`\nMonitor Dashboard: http://localhost:${port}/`);
   logger.info(`Trading Interval: ${process.env.TRADING_INTERVAL_MINUTES || 5} minutes`);
-  logger.info(`Account Record Interval: ${process.env.ACCOUNT_RECORD_INTERVAL_MINUTES || 10} minutes`);
+  // logger.info(`Account Record Interval: ${process.env.ACCOUNT_RECORD_INTERVAL_MINUTES || 10} minutes`); // 已迁移到每个引擎内部
   logger.info(`Supported Symbols: ${RISK_PARAMS.TRADING_SYMBOLS.join(', ')}`);
   logger.info(`Max Leverage: ${RISK_PARAMS.MAX_LEVERAGE}x`);
   logger.info(`Max Positions: ${RISK_PARAMS.MAX_POSITIONS}`);

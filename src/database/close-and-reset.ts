@@ -33,6 +33,7 @@ const logger = createPinoLogger({
 const CREATE_TABLES_SQL = `
 CREATE TABLE IF NOT EXISTS account_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    engine_id INTEGER NOT NULL,
     timestamp TEXT NOT NULL,
     total_value REAL NOT NULL,
     available_cash REAL NOT NULL,
@@ -43,6 +44,7 @@ CREATE TABLE IF NOT EXISTS account_history (
 
 CREATE TABLE IF NOT EXISTS positions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    engine_id INTEGER NOT NULL,
     symbol TEXT NOT NULL,
     quantity REAL NOT NULL,
     entry_price REAL NOT NULL,
@@ -93,6 +95,14 @@ CREATE TABLE IF NOT EXISTS trade_logs (
     leverage INTEGER,
     pnl REAL,
     fee REAL,
+    status TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS quant_engines (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    api_key TEXT NOT NULL,
+    api_secret TEXT NOT NULL,
     status TEXT NOT NULL
 );
 `;
@@ -168,6 +178,7 @@ async function resetDatabase(): Promise<void> {
     await client.execute("DROP TABLE IF EXISTS trading_signals");
     await client.execute("DROP TABLE IF EXISTS positions");
     await client.execute("DROP TABLE IF EXISTS account_history");
+    await client.execute("DROP TABLE IF EXISTS quant_engines");
     logger.info("✅ 现有表已删除");
 
     // 重新创建表
@@ -175,13 +186,21 @@ async function resetDatabase(): Promise<void> {
     await client.executeMultiple(CREATE_TABLES_SQL);
     logger.info("✅ 表创建完成");
 
+    // 插入默认引擎
+    logger.info("⚙️ 创建默认引擎...");
+    await client.execute({
+      sql: `INSERT INTO quant_engines (id, name, api_key, api_secret, status) VALUES (1, 'Default Engine', ?, ?, 'stopped')`,
+      args: [process.env.GATE_API_KEY || '', process.env.GATE_API_SECRET || '']
+    });
+
     // 插入初始资金记录
     logger.info(`💰 插入初始资金记录: ${initialBalance} USDT`);
     await client.execute({
       sql: `INSERT INTO account_history 
-            (timestamp, total_value, available_cash, unrealized_pnl, realized_pnl, return_percent) 
-            VALUES (?, ?, ?, ?, ?, ?)`,
+            (engine_id, timestamp, total_value, available_cash, unrealized_pnl, realized_pnl, return_percent) 
+            VALUES (?, ?, ?, ?, ?, ?, ?)`,
       args: [
+        1, // engine_id
         new Date().toISOString(),
         initialBalance,
         initialBalance,
@@ -262,10 +281,11 @@ async function syncPositions(): Promise<void> {
         
         await client.execute({
           sql: `INSERT INTO positions 
-                (symbol, quantity, entry_price, current_price, liquidation_price, unrealized_pnl, 
+                (engine_id, symbol, quantity, entry_price, current_price, liquidation_price, unrealized_pnl, 
                  leverage, side, entry_order_id, opened_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           args: [
+            1, // engine_id
             symbol,
             quantity,
             entryPrice,

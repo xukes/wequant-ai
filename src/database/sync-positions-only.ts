@@ -73,7 +73,7 @@ async function syncPositionsOnly() {
     // 3. 从 Gate.io 获取持仓
     const gateClient = createGateClient();
     const positions = await gateClient.getPositions();
-    const activePositions = positions.filter(p => Number.parseInt(p.size || "0") !== 0);
+    const activePositions = positions.filter((p: any) => Number.parseInt(p.size || "0") !== 0);
     
     logger.info(`\n📊 Gate.io 当前持仓数: ${activePositions.length}`);
     
@@ -100,10 +100,11 @@ async function syncPositionsOnly() {
         
         await client.execute({
           sql: `INSERT INTO positions 
-                (symbol, quantity, entry_price, current_price, liquidation_price, unrealized_pnl, 
+                (engine_id, symbol, quantity, entry_price, current_price, liquidation_price, unrealized_pnl, 
                  leverage, side, entry_order_id, opened_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           args: [
+            1, // engine_id
             symbol,
             quantity,
             entryPrice,
@@ -124,10 +125,10 @@ async function syncPositionsOnly() {
     }
     
     client.close();
-    logger.info("\n✅ 持仓同步完成");
+    logger.info("\n✅ 持仓同步完成!");
     
   } catch (error) {
-    logger.error("❌ 同步失败:", error);
+    logger.error("❌ 同步失败:", error as any);
     process.exit(1);
   }
 }

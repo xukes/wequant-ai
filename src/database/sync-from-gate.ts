@@ -51,7 +51,7 @@ async function syncFromGate() {
     
     // 2. 获取持仓信息
     const positions = await gateClient.getPositions();
-    const activePositions = positions.filter(p => Number.parseInt(p.size || "0") !== 0);
+    const activePositions = positions.filter((p: any) => Number.parseInt(p.size || "0") !== 0);
     logger.info(`   当前持仓数: ${activePositions.length}`);
     
     if (activePositions.length > 0) {
@@ -98,13 +98,21 @@ async function syncFromGate() {
     await client.executeMultiple(CREATE_TABLES_SQL);
     logger.info("✅ 表创建完成");
     
+    // 插入默认引擎
+    logger.info("⚙️ 创建默认引擎...");
+    await client.execute({
+      sql: `INSERT INTO quant_engines (id, name, api_key, api_secret, status) VALUES (1, 'Default Engine', ?, ?, 'stopped')`,
+      args: [process.env.GATE_API_KEY || '', process.env.GATE_API_SECRET || '']
+    });
+
     // 7. 插入初始账户记录（使用 Gate.io 的实际资金）
     logger.info(`💰 插入初始资金记录: ${currentBalance} USDT`);
     await client.execute({
       sql: `INSERT INTO account_history 
-            (timestamp, total_value, available_cash, unrealized_pnl, realized_pnl, return_percent) 
-            VALUES (?, ?, ?, ?, ?, ?)`,
+            (engine_id, timestamp, total_value, available_cash, unrealized_pnl, realized_pnl, return_percent) 
+            VALUES (?, ?, ?, ?, ?, ?, ?)`,
       args: [
+        1, // engine_id
         new Date().toISOString(),
         currentBalance,
         availableBalance,
@@ -136,10 +144,11 @@ async function syncFromGate() {
         
         await client.execute({
           sql: `INSERT INTO positions 
-                (symbol, quantity, entry_price, current_price, liquidation_price, unrealized_pnl, 
+                (engine_id, symbol, quantity, entry_price, current_price, liquidation_price, unrealized_pnl, 
                  leverage, side, entry_order_id, opened_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           args: [
+            1, // engine_id
             symbol,
             quantity,
             entryPrice,
@@ -186,33 +195,10 @@ async function syncFromGate() {
       fs.writeFileSync(envPath, envContent, "utf-8");
       logger.info(`✅ .env 文件已更新`);
     } catch (error) {
-      logger.warn(`⚠️  更新 .env 文件失败:`, error);
-      logger.warn(`   请手动设置 INITIAL_BALANCE=${currentBalance.toFixed(2)}`);
+      logger.warn(`⚠️  更新 .env 文件失败:`, error as any);
     }
-    
-    // 10. 显示最终状态
-    logger.info(`\n${"=".repeat(60)}`);
-    logger.info("✅ 数据库和配置同步完成！");
-    logger.info(`${"=".repeat(60)}`);
-    
-    logger.info(`\n📊 新的初始状态:`);
-    logger.info(`   总资产: ${currentBalance} USDT`);
-    logger.info(`   可用资金: ${availableBalance} USDT`);
-    logger.info(`   未实现盈亏: ${unrealizedPnl} USDT`);
-    logger.info(`   已实现盈亏: 0 USDT`);
-    logger.info(`   总收益率: 0%`);
-    logger.info(`   持仓数: ${activePositions.length}`);
-    
-    logger.info(`\n💡 提示:`);
-    logger.info(`   1. 数据库已同步，初始资金: ${currentBalance.toFixed(2)} USDT`);
-    logger.info(`   2. .env 文件已更新，INITIAL_BALANCE: ${currentBalance.toFixed(2)} USDT`);
-    logger.info(`   3. 从现在开始，收益率将基于此金额计算`);
-    logger.info(`\n🚀 可以运行以下命令启动交易系统:`);
-    logger.info(`   npm run trading:start`);
-    
-    client.close();
   } catch (error) {
-    logger.error("❌ 同步失败:", error as any);
+    logger.error("❌ 初始化失败:", error as any);
     process.exit(1);
   }
 }

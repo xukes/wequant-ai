@@ -61,6 +61,7 @@ export class GateClient {
     }
     
     this.client.setApiKeySecret(apiKey, apiSecret);
+    this.newClient.setApiKeySecret(apiKey, apiSecret); // Ensure newClient also gets credentials
 
     // @ts-ignore
     this.futuresApi = new GateApi.FuturesApi(this.client);
@@ -71,7 +72,7 @@ export class GateClient {
     // @ts-ignore
     this.spotApi = new GateApi.SpotApi(this.client);
 
-    logger.info("GATE API client initialized successfully");
+    // logger.info("GATE API client initialized successfully"); // Reduce log noise
   }
 
   /**
@@ -586,20 +587,14 @@ let gateClientInstance: GateClient | null = null;
 /**
  * Create global GATE client instance (Singleton pattern)
  */
-export function createGateClient(): GateClient {
-  // If instance already exists, return it directly
-  if (gateClientInstance) {
-    return gateClientInstance;
+export function createGateClient(apiKey?: string, apiSecret?: string) {
+  // 优先使用传入的 Key，如果没有则尝试使用环境变量（兼容旧模式或测试）
+  const key = apiKey || process.env.GATE_API_KEY || "";
+  const secret = apiSecret || process.env.GATE_API_SECRET || "";
+  
+  if (!key || !secret) {
+    throw new Error("Gate API Key/Secret is required");
   }
-
-  const apiKey = process.env.GATE_API_KEY;
-  const apiSecret = process.env.GATE_API_SECRET;
-
-  if (!apiKey || !apiSecret) {
-    throw new Error("GATE_API_KEY and GATE_API_SECRET must be set in environment variables");
-  }
-
-  // Create and cache instance
-  gateClientInstance = new GateClient(apiKey, apiSecret);
-  return gateClientInstance;
+  
+  return new GateClient(key, secret);
 }

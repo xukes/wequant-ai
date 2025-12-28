@@ -325,10 +325,11 @@ export const syncPositionsTool = createTool({
         
         await dbClient.execute({
           sql: `INSERT INTO positions 
-                (symbol, quantity, entry_price, current_price, liquidation_price, unrealized_pnl, 
+                (engine_id, symbol, quantity, entry_price, current_price, liquidation_price, unrealized_pnl, 
                  leverage, side, entry_order_id, opened_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           args: [
+            1, // engine_id
             symbol,
             Math.abs(size),
             Number.parseFloat(pos.entryPrice || "0"),

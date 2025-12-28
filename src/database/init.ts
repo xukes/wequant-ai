@@ -32,131 +32,79 @@ const logger = createPinoLogger({
 async function initDatabase() {
   try {
     const dbUrl = process.env.DATABASE_URL || "file:./.voltagent/trading.db";
-    const initialBalance = Number.parseFloat(process.env.INITIAL_BALANCE || "1000");
-
-  logger.info(`Initializing database: ${dbUrl}`);
+    
+    logger.info(`Initializing database: ${dbUrl}`);
 
     const client = createClient({
       url: dbUrl,
     });
 
     // 执行建表语句
-  logger.info("Creating database tables...");
+    logger.info("Creating database tables...");
     await client.executeMultiple(CREATE_TABLES_SQL);
 
-    // 检查是否需要重新初始化
-    const existingHistory = await client.execute(
-      "SELECT COUNT(*) as count FROM account_history"
-    );
-    const count = (existingHistory.rows[0] as any).count as number;
-
-    if (count > 0) {
-      // 检查第一条记录的资金是否与当前设置不同
-      const firstRecord = await client.execute(
-        "SELECT total_value FROM account_history ORDER BY id ASC LIMIT 1"
-      );
-      const firstBalance = Number.parseFloat(firstRecord.rows[0]?.total_value as string || "0");
-      
-      if (firstBalance !== initialBalance) {
-  logger.warn(`⚠️  Detected initial balance change: ${firstBalance} USDT -> ${initialBalance} USDT`);
-  logger.info("Clearing existing data, reinitializing...");
-        
-        // 清空所有交易数据
-        await client.execute("DELETE FROM trades");
-        await client.execute("DELETE FROM positions");
-        await client.execute("DELETE FROM account_history");
-        await client.execute("DELETE FROM trading_signals");
-        await client.execute("DELETE FROM agent_decisions");
-        
-  logger.info("✅ Old data cleared");
-      } else {
-  logger.info(`Database already has ${count} account history records, skipping initialization`);
-        // 显示当前状态后直接返回
-        const latestAccount = await client.execute(
-          "SELECT * FROM account_history ORDER BY timestamp DESC LIMIT 1"
-        );
-        if (latestAccount.rows.length > 0) {
-          const account = latestAccount.rows[0] as any;
-          logger.info("Current account status:");
-          logger.info(`  Total balance: ${account.total_value} USDT`);
-          logger.info(`  Available cash: ${account.available_cash} USDT`);
-          logger.info(`  Unrealized PnL: ${account.unrealized_pnl} USDT`);
-          logger.info(`  Return percent: ${account.return_percent}%`);
-        }
-        
-        const positions = await client.execute("SELECT * FROM positions");
-        if (positions.rows.length > 0) {
-          logger.info(`\nCurrent positions (${positions.rows.length}):`);
-          for (const pos of positions.rows) {
-            const p = pos as any;
-            logger.info(`  ${p.symbol}: ${p.quantity} @ ${p.entry_price} (${p.side}, ${p.leverage}x)`);
-          }
-        } else {
-          logger.info("\nNo current positions");
-        }
-        
-        logger.info("\n✅ Database initialization complete");
-        client.close();
-        return;
-      }
-    }
-
-    // 插入初始账户记录
-  logger.info(`Inserting initial balance record: ${initialBalance} USDT`);
-    await client.execute({
-      sql: `INSERT INTO account_history 
-            (timestamp, total_value, available_cash, unrealized_pnl, realized_pnl, return_percent) 
-            VALUES (?, ?, ?, ?, ?, ?)`,
-      args: [
-        new Date().toISOString(),
-        initialBalance,
-        initialBalance,
-        0,
-        0,
-        0,
-      ],
-    });
-  logger.info("✅ Initial balance record created");
-
-    // 显示当前账户状态
-    const latestAccount = await client.execute(
-      "SELECT * FROM account_history ORDER BY timestamp DESC LIMIT 1"
-    );
-
-    if (latestAccount.rows.length > 0) {
-      const account = latestAccount.rows[0] as any;
-      logger.info("Current account status:");
-      logger.info(`  Total balance: ${account.total_value} USDT`);
-      logger.info(`  Available cash: ${account.available_cash} USDT`);
-      logger.info(`  Unrealized PnL: ${account.unrealized_pnl} USDT`);
-      logger.info(`  Return percent: ${account.return_percent}%`);
-    }
-
-    // 显示当前持仓
-    const positions = await client.execute(
-      "SELECT * FROM positions"
-    );
+    // 简单的迁移逻辑：尝试为旧表添加 engine_id 字段
+    // 如果是全新安装，CREATE_TABLES_SQL 已经创建了带 engine_id 的表
+    // 如果是旧数据库，CREATE_TABLES_SQL 会跳过已存在的表，这里补上字段
+    const tablesToMigrate = ['trades', 'positions', 'account_history', 'trading_signals', 'agent_decisions'];
     
-    if (positions.rows.length > 0) {
-      logger.info(`\nCurrent positions (${positions.rows.length}):`);
-      for (const pos of positions.rows) {
-        const p = pos as any;
-        logger.info(`  ${p.symbol}: ${p.quantity} @ ${p.entry_price} (${p.side}, ${p.leverage}x)`);
+    for (const table of tablesToMigrate) {
+      try {
+        // 检查表是否存在
+        const tableExists = await client.execute(`SELECT name FROM sqlite_master WHERE type='table' AND name='${table}'`);
+        if (tableExists.rows.length > 0) {
+          // 尝试添加 engine_id 列
+          await client.execute(`ALTER TABLE ${table} ADD COLUMN engine_id INTEGER DEFAULT 0`);
+          logger.info(`✅ Migrated table ${table}: added engine_id column`);
+        }
+      } catch (e: any) {
+        // 如果错误包含 "duplicate column name"，说明列已存在，忽略
+        if (e.message && !e.message.includes("duplicate column name")) {
+           logger.warn(`⚠️  Migration check for ${table}: ${e.message}`);
+        }
       }
-    } else {
-      logger.info("\nNo current positions");
     }
 
-    logger.info("\n✅ Database initialization complete");
+    // 检查并创建默认引擎
+    try {
+      const enginesResult = await client.execute("SELECT COUNT(*) as count FROM quant_engines");
+      const engineCount = (enginesResult.rows[0] as any).count;
+      
+      if (engineCount === 0) {
+          logger.info("⚙️ No engines found. Creating default engine (ID: 1)...");
+          await client.execute({
+              sql: `INSERT INTO quant_engines (id, name, api_key, api_secret, status) VALUES (1, 'Default Engine', ?, ?, 'stopped')`,
+              args: [process.env.GATE_API_KEY || '', process.env.GATE_API_SECRET || '']
+          });
+      }
+      
+      // 迁移历史数据：将 engine_id=0 或 NULL 的记录更新为 1 (默认引擎)
+      for (const table of tablesToMigrate) {
+          try {
+             // 检查是否有需要更新的记录
+             const checkResult = await client.execute(`SELECT COUNT(*) as count FROM ${table} WHERE engine_id = 0 OR engine_id IS NULL`);
+             const count = (checkResult.rows[0] as any).count;
+             
+             if (count > 0) {
+                 await client.execute(`UPDATE ${table} SET engine_id = 1 WHERE engine_id = 0 OR engine_id IS NULL`);
+                 logger.info(`✅ Updated ${table}: set default engine_id = 1 for ${count} legacy records`);
+             }
+          } catch (e: any) {
+              // 忽略错误
+          }
+      }
+
+      logger.info(`✅ Database initialized. Found ${engineCount > 0 ? engineCount : 1} quant engines.`);
+    } catch (e) {
+      logger.info("✅ Database initialized.");
+    }
+
     client.close();
   } catch (error) {
-  logger.error("❌ Database initialization failed:", error as any);
+    logger.error("❌ Database initialization failed:", error as any);
     process.exit(1);
   }
 }
 
 export { initDatabase };
-
-
-initDatabase();
 
