@@ -396,7 +396,7 @@ export class AgentRunner {
     const totalBalance = accountInfo.totalBalance;
     const riskParams = this.config.riskParams || {};
     const stopLossUsdt = riskParams.stopLossUsdt || 50;
-    const takeProfitUsdt = riskParams.takeProfitUsdt || 10000;
+    const takeProfitUsdt = riskParams.takeProfitUsdt || 20000;
     
     if (totalBalance <= stopLossUsdt) {
       logger.error(`[Engine ${this.config.id}] Stop loss triggered! Balance: ${totalBalance} <= ${stopLossUsdt}`);

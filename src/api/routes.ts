@@ -36,6 +36,18 @@ const dbClient = createClient({
 
 export function createApiRoutes() {
   const app = new Hono();
+  
+  // CORS Middleware
+  app.use('*', async (c, next) => {
+    c.res.headers.set('Access-Control-Allow-Origin', '*');
+    c.res.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    c.res.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    if (c.req.method === 'OPTIONS') {
+      return c.text('', 204);
+    }
+    await next();
+  });
+
   // Health check endpoint
   app.get("/api/health", (c) => {
     return c.json({ status: "ok" }, 200);

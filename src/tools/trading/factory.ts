@@ -109,7 +109,7 @@ export function createToolsForEngine(gateClient: GateClient, engineId: number) {
         return {
           success: true,
           message: `下单成功: ${side} ${symbol}, 数量 ${quantity}, 订单ID ${order.id}`,
-          orderId: order.id
+          orderId: String(order.id)
         };
       } catch (error: any) {
         return { success: false, message: `下单失败: ${error.message}` };
@@ -144,7 +144,7 @@ export function createToolsForEngine(gateClient: GateClient, engineId: number) {
         return {
           success: true,
           message: `平仓指令已发送: ${symbol}, 订单ID ${order.id}`,
-          orderId: order.id
+          orderId: String(order.id)
         };
       } catch (error: any) {
         return { success: false, message: `平仓失败: ${error.message}` };

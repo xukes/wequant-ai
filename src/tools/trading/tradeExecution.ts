@@ -80,7 +80,7 @@ export const openPositionTool = createTool({
       return {
         success: true,
         message: `下单成功: ${side} ${symbol}, 数量 ${quantity}, 订单ID ${order.id}`,
-        orderId: order.id,
+        orderId: String(order.id),
         price: currentPrice
       };
     } catch (error: any) {
@@ -120,7 +120,7 @@ export const closePositionTool = createTool({
       return {
         success: true,
         message: `平仓指令已发送: ${symbol}, 订单ID ${order.id}`,
-        orderId: order.id
+        orderId: String(order.id)
       };
     } catch (error: any) {
       return { success: false, message: `平仓失败: ${error.message}` };
@@ -142,10 +142,11 @@ export const cancelOrderTool = createTool({
     const client = createGateClient();
     try {
       const result = await client.cancelOrder(orderId);
+      const safeResult = JSON.parse(JSON.stringify(result, (_, v) => typeof v === 'bigint' ? v.toString() : v));
       return {
         success: true,
         message: `订单已取消: ${orderId}`,
-        result
+        result: safeResult
       };
     } catch (error: any) {
       return { success: false, message: `取消订单失败: ${error.message}` };
