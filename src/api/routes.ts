@@ -108,11 +108,114 @@ export function createApiRoutes() {
     }
   });
 
+  // 3.5 Delete an Engine
+  app.delete("/api/engines/:id", async (c) => {
+    const id = Number.parseInt(c.req.param("id"));
+    try {
+      // Ensure stopped
+      // await EngineManager.getInstance().stopEngine(id);
+      
+      // Delete from DB
+      await dbClient.execute({
+        sql: "DELETE FROM quant_engines WHERE id = ?",
+        args: [id]
+      });
+      
+      // Optional: Delete related data if needed, or let it stay for history
+      // For now, we just delete the engine record so it doesn't show up.
+      
+      return c.json({ success: true, message: `Engine ${id} deleted` });
+    } catch (error: any) {
+      return c.json({ error: error.message }, 500);
+    }
+  });
+
   // 4. List all Engines
   app.get("/api/engines", async (c) => {
     try {
-      const result = await dbClient.execute("SELECT id, name, status, strategy, last_run_at FROM quant_engines");
+      const result = await dbClient.execute("SELECT * FROM quant_engines ORDER BY created_at DESC");
       return c.json({ engines: result.rows });
+    } catch (error: any) {
+      return c.json({ error: error.message }, 500);
+    }
+  });
+
+  // 5. Get Engine Details (Stats)
+  app.get("/api/engines/:id/stats", async (c) => {
+    const id = Number.parseInt(c.req.param("id"));
+    try {
+      // Get latest account history
+      const historyResult = await dbClient.execute({
+        sql: "SELECT * FROM account_history WHERE engine_id = ? ORDER BY timestamp DESC LIMIT 1",
+        args: [id]
+      });
+      
+      // Get positions count and sum unrealized pnl
+      const positionsResult = await dbClient.execute({
+        sql: "SELECT COUNT(*) as count, SUM(unrealized_pnl) as total_pnl FROM positions WHERE engine_id = ?",
+        args: [id]
+      });
+
+      return c.json({
+        latestHistory: historyResult.rows[0] || null,
+        positionsSummary: positionsResult.rows[0] || { count: 0, total_pnl: 0 }
+      });
+    } catch (error: any) {
+      return c.json({ error: error.message }, 500);
+    }
+  });
+
+  // 6. Get Engine Chart Data (Account History)
+  app.get("/api/engines/:id/chart", async (c) => {
+    const id = Number.parseInt(c.req.param("id"));
+    try {
+      const result = await dbClient.execute({
+        sql: "SELECT timestamp, total_value, unrealized_pnl FROM account_history WHERE engine_id = ? ORDER BY timestamp ASC",
+        args: [id]
+      });
+      return c.json({ data: result.rows });
+    } catch (error: any) {
+      return c.json({ error: error.message }, 500);
+    }
+  });
+
+  // 7. Get Engine Positions
+  app.get("/api/engines/:id/positions", async (c) => {
+    const id = Number.parseInt(c.req.param("id"));
+    try {
+      const result = await dbClient.execute({
+        sql: "SELECT * FROM positions WHERE engine_id = ? ORDER BY opened_at DESC",
+        args: [id]
+      });
+      return c.json({ data: result.rows });
+    } catch (error: any) {
+      return c.json({ error: error.message }, 500);
+    }
+  });
+
+  // 8. Get Engine Trades
+  app.get("/api/engines/:id/trades", async (c) => {
+    const id = Number.parseInt(c.req.param("id"));
+    try {
+      const result = await dbClient.execute({
+        sql: "SELECT * FROM trades WHERE engine_id = ? ORDER BY timestamp DESC LIMIT 100",
+        args: [id]
+      });
+      return c.json({ data: result.rows });
+    } catch (error: any) {
+      return c.json({ error: error.message }, 500);
+    }
+  });
+
+  // 9. Get Engine Decisions (Logs)
+  app.get("/api/engines/:id/decisions", async (c) => {
+    const id = Number.parseInt(c.req.param("id"));
+    try {
+      const result = await dbClient.execute({
+        sql: "SELECT * FROM agent_decisions WHERE engine_id = ? ORDER BY timestamp DESC LIMIT 50",
+        args: [id]
+      });
+      return c.json({ data: result.rows });
     } catch (error: any) {
       return c.json({ error: error.message }, 500);
     }
