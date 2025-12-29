@@ -65,39 +65,7 @@ async function initDatabase() {
       }
     }
 
-    // 检查并创建默认引擎
-    try {
-      const enginesResult = await client.execute("SELECT COUNT(*) as count FROM quant_engines");
-      const engineCount = (enginesResult.rows[0] as any).count;
-      
-      if (engineCount === 0) {
-          logger.info("⚙️ No engines found. Creating default engine (ID: 1)...");
-          await client.execute({
-              sql: `INSERT INTO quant_engines (id, name, api_key, api_secret, status) VALUES (1, 'Default Engine', ?, ?, 'stopped')`,
-              args: [process.env.GATE_API_KEY || '', process.env.GATE_API_SECRET || '']
-          });
-      }
-      
-      // 迁移历史数据：将 engine_id=0 或 NULL 的记录更新为 1 (默认引擎)
-      for (const table of tablesToMigrate) {
-          try {
-             // 检查是否有需要更新的记录
-             const checkResult = await client.execute(`SELECT COUNT(*) as count FROM ${table} WHERE engine_id = 0 OR engine_id IS NULL`);
-             const count = (checkResult.rows[0] as any).count;
-             
-             if (count > 0) {
-                 await client.execute(`UPDATE ${table} SET engine_id = 1 WHERE engine_id = 0 OR engine_id IS NULL`);
-                 logger.info(`✅ Updated ${table}: set default engine_id = 1 for ${count} legacy records`);
-             }
-          } catch (e: any) {
-              // 忽略错误
-          }
-      }
-
-      logger.info(`✅ Database initialized. Found ${engineCount > 0 ? engineCount : 1} quant engines.`);
-    } catch (e) {
-      logger.info("✅ Database initialized.");
-    }
+    logger.info("Database initialization complete.");
 
     client.close();
   } catch (error) {

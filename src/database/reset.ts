@@ -33,11 +33,10 @@ const logger = createPinoLogger({
 async function resetDatabase() {
   try {
     const dbUrl = process.env.DATABASE_URL || "file:./.voltagent/trading.db";
-    const initialBalance = Number.parseFloat(process.env.INITIAL_BALANCE || "1000");
 
     logger.info("⚠️  强制重新初始化数据库");
     logger.info(`数据库路径: ${dbUrl}`);
-    logger.info(`初始资金: ${initialBalance} USDT`);
+    // logger.info(`初始资金: ${initialBalance} USDT`);
 
     const client = createClient({
       url: dbUrl,
@@ -58,51 +57,9 @@ async function resetDatabase() {
     await client.executeMultiple(CREATE_TABLES_SQL);
     logger.info("✅ 表创建完成");
 
-    // 插入默认引擎
-    logger.info("⚙️ 创建默认引擎...");
-    await client.execute({
-      sql: `INSERT INTO quant_engines (id, name, api_key, api_secret, status) VALUES (1, 'Default Engine', ?, ?, 'stopped')`,
-      args: [process.env.GATE_API_KEY || '', process.env.GATE_API_SECRET || '']
-    });
-
-    // 插入初始资金记录
-    logger.info(`💰 插入初始资金记录: ${initialBalance} USDT`);
-    await client.execute({
-      sql: `INSERT INTO account_history 
-            (engine_id, timestamp, total_value, available_cash, unrealized_pnl, realized_pnl, return_percent) 
-            VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      args: [
-        1, // engine_id
-        new Date().toISOString(),
-        initialBalance,
-        initialBalance,
-        0,
-        0,
-        0,
-      ],
-    });
-
-    // 验证初始化结果
-    const latestAccount = await client.execute(
-      "SELECT * FROM account_history ORDER BY timestamp DESC LIMIT 1"
-    );
-
-    if (latestAccount.rows.length > 0) {
-      const account = latestAccount.rows[0] as any;
-      logger.info("\n" + "=".repeat(60));
-      logger.info("✅ 数据库重置成功！");
-      logger.info("=".repeat(60));
-      logger.info("\n📊 初始账户状态:");
-      logger.info(`  总资产: ${account.total_value} USDT`);
-      logger.info(`  可用资金: ${account.available_cash} USDT`);
-      logger.info(`  未实现盈亏: ${account.unrealized_pnl} USDT`);
-      logger.info(`  已实现盈亏: ${account.realized_pnl} USDT`);
-      logger.info(`  总收益率: ${account.return_percent}%`);
-      logger.info("\n当前无持仓");
-      logger.info("\n" + "=".repeat(60));
-    }
-
-    client.close();
+   
+    logger.info("✅ 数据库重置成功！");
+    // client.close();
     logger.info("\n🎉 数据库已重置为初始状态，可以开始交易了！");
     
   } catch (error) {

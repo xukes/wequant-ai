@@ -24,7 +24,7 @@ import { createToolsForEngine } from "../tools/trading/factory";
 import { Agent, Memory } from "@voltagent/core";
 import { LibSQLMemoryAdapter } from "@voltagent/libsql";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
-import { generateTradingPrompt } from "../agents/tradingAgent";
+import { generateTradingPrompt, generateInstructions, TradingStrategy } from "../agents/tradingAgent";
 import { RISK_PARAMS } from "../config/riskParams";
 import { 
   calculateIndicators, 
@@ -62,12 +62,19 @@ export class AgentRunner {
   private isRunning: boolean = false;
   private iterationCount: number = 0;
   private startTime: Date = new Date();
-  // 支持的币种 - 从配置中读取
-  private readonly SYMBOLS = [...RISK_PARAMS.TRADING_SYMBOLS] as string[];
+  // 支持的币种
+  private readonly SYMBOLS: string[];
 
   constructor(config: EngineConfig) {
     this.config = config;
     this.gateClient = new GateClient(config.apiKey, config.apiSecret);
+
+    // Initialize symbols from config or default
+    if (config.riskParams && config.riskParams.symbols && Array.isArray(config.riskParams.symbols) && config.riskParams.symbols.length > 0) {
+      this.SYMBOLS = config.riskParams.symbols;
+    } else {
+      this.SYMBOLS = [...RISK_PARAMS.TRADING_SYMBOLS];
+    }
     
     // 初始化 Agent
     const openrouter = createOpenRouter({
@@ -87,13 +94,17 @@ export class AgentRunner {
     // 创建绑定了特定 GateClient 的工具集
     const tools = createToolsForEngine(this.gateClient, config.id);
 
+    // 使用详细的策略指令生成 System Prompt
+    // 默认执行间隔为 1 分钟 (与 cron 调度一致)
+    const intervalMinutes = 1;
+    const strategy = (config.strategy as TradingStrategy) || "balanced";
+    const instructions = generateInstructions(strategy, intervalMinutes);
+
     this.agent = new Agent({
       name: `quant-engine-${config.id}`,
       model,
       memory,
-      instructions: `你是一个专业的加密货币量化交易员。你的目标是根据市场数据和账户状态，制定交易策略并执行交易。
-      当前策略风格: ${config.strategy}。
-      请严格遵守风险控制参数。`,
+      instructions,
       tools,
     });
   }
@@ -146,6 +157,13 @@ export class AgentRunner {
     try {
       const account = await this.gateClient.getFuturesAccount();
       
+      const accountTotal = Number.parseFloat(account.total || "0");
+      const availableBalance = Number.parseFloat(account.available || "0");
+      const unrealisedPnl = Number.parseFloat(account.unrealisedPnl || "0");
+      
+      // Gate.io account.total includes unrealized PnL
+      const totalBalance = accountTotal - unrealisedPnl;
+
       // Get initial capital from database (specific to this engine)
       const initialResult = await dbClient.execute({
         sql: "SELECT total_value FROM account_history WHERE engine_id = ? ORDER BY timestamp ASC LIMIT 1",
@@ -154,7 +172,7 @@ export class AgentRunner {
       
       const initialBalance = initialResult.rows[0]
         ? Number.parseFloat(initialResult.rows[0].total_value as string)
-        : 100; // Default fallback
+        : totalBalance; // Default fallback to current balance
       
       // Get peak balance
       const peakResult = await dbClient.execute({
@@ -165,13 +183,6 @@ export class AgentRunner {
         ? Number.parseFloat(peakResult.rows[0].peak_value as string)
         : initialBalance;
 
-      const accountTotal = Number.parseFloat(account.total || "0");
-      const availableBalance = Number.parseFloat(account.available || "0");
-      const unrealisedPnl = Number.parseFloat(account.unrealisedPnl || "0");
-      
-      // Gate.io account.total includes unrealized PnL
-      const totalBalance = accountTotal - unrealisedPnl;
-      
       // Return percent based on initial balance
       const returnPercent = initialBalance > 0 
         ? ((totalBalance - initialBalance) / initialBalance) * 100
@@ -394,19 +405,22 @@ export class AgentRunner {
    */
   private async checkAccountThresholds(accountInfo: any): Promise<boolean> {
     const totalBalance = accountInfo.totalBalance;
+    const initialBalance = accountInfo.initialBalance;
     const riskParams = this.config.riskParams || {};
     const stopLossUsdt = riskParams.stopLossUsdt || 50;
     const takeProfitUsdt = riskParams.takeProfitUsdt || 20000;
     
-    if (totalBalance <= stopLossUsdt) {
-      logger.error(`[Engine ${this.config.id}] Stop loss triggered! Balance: ${totalBalance} <= ${stopLossUsdt}`);
-      await this.closeAllPositions(`Stop loss triggered`);
+    const pnl = totalBalance - initialBalance;
+    
+    if (pnl <= -stopLossUsdt) {
+      logger.error(`[Engine ${this.config.id}] Stop loss triggered! PnL: ${pnl.toFixed(2)} <= -${stopLossUsdt}`);
+      await this.closeAllPositions(`Stop loss triggered (PnL ${pnl.toFixed(2)} USDT)`);
       return true;
     }
     
-    if (totalBalance >= takeProfitUsdt) {
-      logger.warn(`[Engine ${this.config.id}] Take profit triggered! Balance: ${totalBalance} >= ${takeProfitUsdt}`);
-      await this.closeAllPositions(`Take profit triggered`);
+    if (pnl >= takeProfitUsdt) {
+      logger.warn(`[Engine ${this.config.id}] Take profit triggered! PnL: ${pnl.toFixed(2)} >= ${takeProfitUsdt}`);
+      await this.closeAllPositions(`Take profit triggered (PnL ${pnl.toFixed(2)} USDT)`);
       return true;
     }
     

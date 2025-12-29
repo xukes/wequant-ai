@@ -61,13 +61,13 @@ async function main() {
   logger.info("System started successfully!");
   logger.info("=".repeat(80));
   logger.info(`\nMonitor Dashboard: http://localhost:${port}/`);
-  logger.info(`Trading Interval: ${process.env.TRADING_INTERVAL_MINUTES || 5} minutes`);
+  // logger.info(`Trading Interval: ${process.env.TRADING_INTERVAL_MINUTES || 5} minutes`);
   // logger.info(`Account Record Interval: ${process.env.ACCOUNT_RECORD_INTERVAL_MINUTES || 10} minutes`); // 已迁移到每个引擎内部
-  logger.info(`Supported Symbols: ${RISK_PARAMS.TRADING_SYMBOLS.join(', ')}`);
-  logger.info(`Max Leverage: ${RISK_PARAMS.MAX_LEVERAGE}x`);
-  logger.info(`Max Positions: ${RISK_PARAMS.MAX_POSITIONS}`);
-  logger.info(`\n🔴 Stop Loss: ${process.env.ACCOUNT_STOP_LOSS_USDT || 50} USDT (close all & exit)`);
-  logger.info(`🟢 Take Profit: ${process.env.ACCOUNT_TAKE_PROFIT_USDT || 10000} USDT (close all & exit)`);
+  // logger.info(`Supported Symbols: ${RISK_PARAMS.TRADING_SYMBOLS.join(', ')}`);
+  // logger.info(`Max Leverage: ${RISK_PARAMS.MAX_LEVERAGE}x`);
+  // logger.info(`Max Positions: ${RISK_PARAMS.MAX_POSITIONS}`);
+  // logger.info(`\n🔴 Stop Loss: ${process.env.ACCOUNT_STOP_LOSS_USDT || 50} USDT (close all & exit)`);
+  // logger.info(`🟢 Take Profit: ${process.env.ACCOUNT_TAKE_PROFIT_USDT || 10000} USDT (close all & exit)`);
   logger.info("\nPress Ctrl+C to stop the system\n");
 }
 

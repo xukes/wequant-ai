@@ -496,7 +496,7 @@ export function generateTradingPrompt(data: {
 /**
  * 根据策略生成交易指令
  */
-function generateInstructions(strategy: TradingStrategy, intervalMinutes: number): string {
+export function generateInstructions(strategy: TradingStrategy, intervalMinutes: number): string {
   const params = getStrategyParams(strategy);
   
   return `您是一位经验丰富的加密货币期货量化交易员，当前采用【${params.name}】策略。您的目标是${params.tradingStyle}。

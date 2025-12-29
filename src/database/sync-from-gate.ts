@@ -98,29 +98,6 @@ async function syncFromGate() {
     await client.executeMultiple(CREATE_TABLES_SQL);
     logger.info("✅ 表创建完成");
     
-    // 插入默认引擎
-    logger.info("⚙️ 创建默认引擎...");
-    await client.execute({
-      sql: `INSERT INTO quant_engines (id, name, api_key, api_secret, status) VALUES (1, 'Default Engine', ?, ?, 'stopped')`,
-      args: [process.env.GATE_API_KEY || '', process.env.GATE_API_SECRET || '']
-    });
-
-    // 7. 插入初始账户记录（使用 Gate.io 的实际资金）
-    logger.info(`💰 插入初始资金记录: ${currentBalance} USDT`);
-    await client.execute({
-      sql: `INSERT INTO account_history 
-            (engine_id, timestamp, total_value, available_cash, unrealized_pnl, realized_pnl, return_percent) 
-            VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      args: [
-        1, // engine_id
-        new Date().toISOString(),
-        currentBalance,
-        availableBalance,
-        unrealizedPnl,
-        0, // realized_pnl 从 0 开始
-        0, // return_percent 从 0% 开始
-      ],
-    });
     
     // 8. 同步持仓到数据库
     if (activePositions.length > 0) {
