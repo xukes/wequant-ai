@@ -113,16 +113,26 @@ export function createApiRoutes() {
     const id = Number.parseInt(c.req.param("id"));
     try {
       // Ensure stopped
-      // await EngineManager.getInstance().stopEngine(id);
+      try {
+        await EngineManager.getInstance().stopEngine(id);
+      } catch (e) {
+        // Ignore error if engine is not running or not found in manager
+      }
       
+      // Delete related data first (Manual Cascade Delete)
+      const tables = ['trades', 'positions', 'account_history', 'trading_signals', 'agent_decisions'];
+      for (const table of tables) {
+        await dbClient.execute({
+          sql: `DELETE FROM ${table} WHERE engine_id = ?`,
+          args: [id]
+        });
+      }
+
       // Delete from DB
       await dbClient.execute({
         sql: "DELETE FROM quant_engines WHERE id = ?",
         args: [id]
       });
-      
-      // Optional: Delete related data if needed, or let it stay for history
-      // For now, we just delete the engine record so it doesn't show up.
       
       return c.json({ success: true, message: `Engine ${id} deleted` });
     } catch (error: any) {

@@ -157,7 +157,7 @@ CREATE TABLE IF NOT EXISTS trades (
   fee REAL,
   timestamp TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending',
-  FOREIGN KEY (engine_id) REFERENCES quant_engines(id)
+  FOREIGN KEY (engine_id) REFERENCES quant_engines(id) ON DELETE CASCADE
 );
 
 -- 持仓表
@@ -182,7 +182,7 @@ CREATE TABLE IF NOT EXISTS positions (
   risk_usd REAL,
   peak_pnl_percent REAL DEFAULT 0,
   UNIQUE(engine_id, symbol), -- 每个引擎下每个币种只能有一个持仓记录
-  FOREIGN KEY (engine_id) REFERENCES quant_engines(id)
+  FOREIGN KEY (engine_id) REFERENCES quant_engines(id) ON DELETE CASCADE
 );
 
 -- 账户历史表
@@ -196,7 +196,7 @@ CREATE TABLE IF NOT EXISTS account_history (
   realized_pnl REAL NOT NULL,
   return_percent REAL NOT NULL,
   sharpe_ratio REAL,
-  FOREIGN KEY (engine_id) REFERENCES quant_engines(id)
+  FOREIGN KEY (engine_id) REFERENCES quant_engines(id) ON DELETE CASCADE
 );
 
 -- 技术指标表
@@ -216,7 +216,7 @@ CREATE TABLE IF NOT EXISTS trading_signals (
   funding_rate REAL,
   atr_3 REAL,
   atr_14 REAL,
-  FOREIGN KEY (engine_id) REFERENCES quant_engines(id)
+  FOREIGN KEY (engine_id) REFERENCES quant_engines(id) ON DELETE CASCADE
 );
 
 -- Agent 决策记录表
@@ -230,7 +230,7 @@ CREATE TABLE IF NOT EXISTS agent_decisions (
   actions_taken TEXT NOT NULL,
   account_value REAL NOT NULL,
   positions_count INTEGER NOT NULL,
-  FOREIGN KEY (engine_id) REFERENCES quant_engines(id)
+  FOREIGN KEY (engine_id) REFERENCES quant_engines(id) ON DELETE CASCADE
 );
 
 -- 系统配置表 (保留用于全局配置)
