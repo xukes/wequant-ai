@@ -37,7 +37,7 @@ async function syncFromGate() {
     logger.info("🔄 从 Gate.io 同步账户信息...");
     
     // 1. 连接 Gate.io 获取当前账户余额
-    const gateClient = createGateClient();
+    const gateClient = createGateClient(process.env.GATE_API_KEY || "", process.env.GATE_API_SECRET || "");
     const account = await gateClient.getFuturesAccount();
     
     const currentBalance = Number.parseFloat(account.total || "0");

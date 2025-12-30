@@ -209,7 +209,7 @@ export async function analyzeTimeframe(
   symbol: string,
   config: TimeframeConfig
 ): Promise<TimeframeIndicators> {
-  const gateClient = createGateClient();
+  const gateClient = createGateClient(process.env.GATE_API_KEY || "", process.env.GATE_API_SECRET || "");
   const contract = `${symbol}_USDT`;
   
   // 获取K线数据

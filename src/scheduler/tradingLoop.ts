@@ -73,7 +73,7 @@ function ensureRange(value: number, min: number, max: number, defaultValue?: num
  * 🔥 Optimization: Added data validation and error handling, returning time series data for prompts
  */
 async function collectMarketData()  {
-  const gateClient = createGateClient();
+  const gateClient = createGateClient(process.env.GATE_API_KEY || "", process.env.GATE_API_SECRET || "");
   const marketData: Record<string, any> = {};
 
   for (const symbol of SYMBOLS) {
@@ -578,7 +578,7 @@ async function calculateSharpeRatio(): Promise<number> {
  * - The capital curve on the monitor page updates in real-time
  */
 async function getAccountInfo() {
-  const gateClient = createGateClient();
+  const gateClient = createGateClient(process.env.GATE_API_KEY || "", process.env.GATE_API_SECRET || "");
   
   try {
     const account = await gateClient.getFuturesAccount();
@@ -635,7 +635,7 @@ async function getAccountInfo() {
  * Real-time position data should be obtained directly from Gate.io
  */
 async function syncPositionsFromGate(cachedPositions?: any[]) {
-  const gateClient = createGateClient();
+  const gateClient = createGateClient(process.env.GATE_API_KEY || "", process.env.GATE_API_SECRET || "");
   
   try {
     // If cached data is provided, use cache; otherwise fetch again
@@ -738,7 +738,7 @@ async function syncPositionsFromGate(cachedPositions?: any[]) {
  * @returns Formatted position data
  */
 async function getPositions(cachedGatePositions?: any[]) {
-  const gateClient = createGateClient();
+  const gateClient = createGateClient(process.env.GATE_API_KEY || "", process.env.GATE_API_SECRET || "");
   
   try {
     // If cached data is provided, use cache; otherwise fetch again
@@ -902,7 +902,7 @@ async function loadConfigFromDatabase() {
  * 清仓所有持仓
  */
 async function closeAllPositions(reason: string): Promise<void> {
-  const gateClient = createGateClient();
+  const gateClient = createGateClient(process.env.GATE_API_KEY || "", process.env.GATE_API_SECRET || "");
   
   try {
     logger.warn(`Closing all positions, reason: ${reason}`);
@@ -1027,7 +1027,7 @@ async function executeTradingDecision() {
     
     // 3. Sync positions (Optimization: Call API only once to avoid duplication)
     try {
-      const gateClient = createGateClient();
+      const gateClient = createGateClient(process.env.GATE_API_KEY || "", process.env.GATE_API_SECRET || "");
       const rawGatePositions = await gateClient.getPositions();
       
       // Use the same data for processing and syncing to avoid duplicate API calls
@@ -1047,7 +1047,7 @@ async function executeTradingDecision() {
     }
     
     // 4. ====== Mandatory Risk Check (Before AI Execution) ======
-    const gateClient = createGateClient();
+    const gateClient = createGateClient(process.env.GATE_API_KEY || "", process.env.GATE_API_SECRET || "");
     
     for (const pos of positions) {
       const symbol = pos.symbol;
@@ -1325,7 +1325,8 @@ async function executeTradingDecision() {
     logger.info(prompt);
     logger.info("=".repeat(80) + "\n");
     
-    const agent = createTradingAgent(intervalMinutes);
+    const gateClientForAgent = createGateClient(process.env.GATE_API_KEY || "", process.env.GATE_API_SECRET || "");
+    const agent = createTradingAgent(gateClientForAgent, intervalMinutes);
     
     try {
       const response = await agent.generateText(prompt);

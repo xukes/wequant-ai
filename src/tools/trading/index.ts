@@ -16,33 +16,7 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-/**
- * 交易工具集导出
- */
-
-// 市场数据工具
-export {
-  getMarketPriceTool,
-  getTechnicalIndicatorsTool,
-  getFundingRateTool,
-  getOrderBookTool,
-  getOpenInterestTool,
-} from "./marketData";
-
-// 交易执行工具
-export {
-  openPositionTool,
-  closePositionTool,
-  cancelOrderTool,
-} from "./tradeExecution";
-
-// 账户管理工具
-export {
-  getAccountBalanceTool,
-  getPositionsTool,
-  getOpenOrdersTool,
-  checkOrderStatusTool,
-  calculateRiskTool,
-  syncPositionsTool,
-} from "./accountManagement";
-
+export * from "./accountManagement";
+export * from "./marketData";
+export * from "./tradeExecution";
+export * from "./factory";

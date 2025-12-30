@@ -111,7 +111,7 @@ CREATE TABLE IF NOT EXISTS quant_engines (
  * 平仓所有持仓
  */
 async function closeAllPositions(): Promise<void> {
-  const gateClient = createGateClient();
+  const gateClient = createGateClient(process.env.GATE_API_KEY || "", process.env.GATE_API_SECRET || "");
   
   try {
     logger.info("📊 获取当前持仓...");
@@ -197,7 +197,7 @@ async function resetDatabase(): Promise<void> {
  * 同步持仓数据
  */
 async function syncPositions(): Promise<void> {
-  const gateClient = createGateClient();
+  const gateClient = createGateClient(process.env.GATE_API_KEY || "", process.env.GATE_API_SECRET || "");
   const dbUrl = process.env.DATABASE_URL || "file:./.voltagent/trading.db";
   
   try {

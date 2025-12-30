@@ -21,70 +21,67 @@
  */
 import { createTool } from "@voltagent/core";
 import { z } from "zod";
-import { createGateClient } from "../../services/gateClient";
+import { GateClient } from "../../services/gateClient";
 import { RISK_PARAMS } from "../../config/riskParams";
-import { createClient } from "@libsql/client";
-
-const dbClient = createClient({
-  url: process.env.DATABASE_URL || "file:./.voltagent/trading.db",
-});
 
 /**
  * 开仓工具
  */
-export const openPositionTool = createTool({
+export const createOpenPositionTool = (gateClient: GateClient) => createTool({
   name: "openPosition",
-  description: "开仓 - 做多或做空指定币种（使用市价单）。IMPORTANT: 开仓前必须先查询可用资金。",
+  description: "开立新的合约仓位 (做多或做空)",
   parameters: z.object({
     symbol: z.enum(RISK_PARAMS.TRADING_SYMBOLS as [string, ...string[]]).describe("币种代码"),
-    side: z.enum(["long", "short"]).describe("方向：long=做多，short=做空"),
-    leverage: z.number().min(1).max(RISK_PARAMS.MAX_LEVERAGE).describe("杠杆倍数"),
-    amountUsdt: z.number().describe("开仓金额（USDT）"),
+    side: z.enum(["long", "short"]).describe("方向: long(做多) 或 short(做空)"),
+    amount: z.number().positive().describe("交易数量 (USDT金额)"),
+    leverage: z.number().min(1).max(RISK_PARAMS.MAX_LEVERAGE).default(1).describe("杠杆倍数"),
   }),
-  execute: async ({ symbol, side, leverage, amountUsdt }) => {
-    const client = createGateClient();
+  execute: async ({ symbol, side, amount, leverage }) => {
     try {
-      // 简单的参数检查
-      if (amountUsdt <= 0) return { success: false, message: "金额必须大于0" };
-      
-      // 实际下单逻辑
-      const contract = `${symbol}_USDT`;
-      const priceData = await client.getFuturesTicker(contract);
-      const currentPrice = Number.parseFloat(priceData.last || "0");
-      
-      if (currentPrice <= 0) return { success: false, message: "获取价格失败" };
-      
-      // 计算数量 (简化版，实际应考虑合约乘数)
-      const quantity = Math.floor((amountUsdt * leverage) / currentPrice);
-      if (quantity <= 0) return { success: false, message: "计算出的下单数量为0" };
-      
-      const size = side === "long" ? quantity : -quantity;
-      
-      // 设置杠杆
-      try {
-        await client.setLeverage(contract, leverage);
-      } catch (e) {
-        // 忽略杠杆设置错误，可能已经设置过了
+      // 1. 检查风险控制
+      if (leverage > RISK_PARAMS.MAX_LEVERAGE) {
+        return { error: `杠杆倍数超过最大限制: ${RISK_PARAMS.MAX_LEVERAGE}` };
       }
 
-      const order = await client.placeOrder({
-        contract,
-        size,
-        price: 0, // 市价单
-      });
+      const contract = `${symbol}_USDT`;
       
-      // 记录到数据库 (使用默认 engine_id 0 或其他标识)
-      // 注意：这里是旧的工具实现，可能不包含 engine_id 上下文
-      // 如果需要兼容新架构，建议使用 factory.ts 中的 createToolsForEngine
+      // 2. 设置杠杆
+      await gateClient.setLeverage(contract, leverage);
+      
+      // 3. 获取当前价格计算数量
+      const ticker = await gateClient.getFuturesTicker(contract);
+      const price = Number.parseFloat(ticker.last || "0");
+      if (price <= 0) return { error: "无法获取有效市场价格" };
+      
+      // 计算合约数量 (Gate.io合约通常以币为单位或张数为单位，这里简化假设为币的数量)
+      // 注意：实际生产环境需要根据合约面值精确计算
+      // 假设 amount 是 USDT 金额，size = (amount * leverage) / price
+      // 且需要取整到合约最小单位
+      let size = Math.floor(((amount * leverage) / price) * 100) / 100; // 保留2位小数
+      
+      // 转换方向: long -> size > 0, short -> size < 0
+      const sizeToSend = side === "long" ? size : -size;
+      
+      // 4. 下单
+      const order = await gateClient.placeFuturesOrder(
+        contract,
+        sizeToSend,
+        0, // 0 表示市价单
+        { tif: "ioc" } // 市价单通常配合 IOC
+      );
       
       return {
         success: true,
-        message: `下单成功: ${side} ${symbol}, 数量 ${quantity}, 订单ID ${order.id}`,
-        orderId: String(order.id),
-        price: currentPrice
+        orderId: order.id,
+        symbol,
+        side,
+        size: sizeToSend,
+        price: order.fill_price || price, // 如果是市价单，可能还没有成交价
+        status: order.status,
+        timestamp: new Date().toISOString()
       };
     } catch (error: any) {
-      return { success: false, message: `下单失败: ${error.message}` };
+      return { error: `开仓失败: ${error.message}` };
     }
   },
 });
@@ -92,64 +89,137 @@ export const openPositionTool = createTool({
 /**
  * 平仓工具
  */
-export const closePositionTool = createTool({
+export const createClosePositionTool = (gateClient: GateClient) => createTool({
   name: "closePosition",
-  description: "平仓 - 平掉指定币种的持仓",
+  description: "平掉指定币种的当前仓位",
   parameters: z.object({
     symbol: z.enum(RISK_PARAMS.TRADING_SYMBOLS as [string, ...string[]]).describe("币种代码"),
   }),
   execute: async ({ symbol }) => {
-    const client = createGateClient();
     try {
-      const positions = await client.getPositions();
-      const targetPos = positions.find((p: any) => p.contract === `${symbol}_USDT`);
+      const contract = `${symbol}_USDT`;
       
-      if (!targetPos || Number.parseInt(targetPos.size || "0") === 0) {
-        return { success: false, message: "当前无持仓" };
+      // 1. 获取当前持仓
+      const positions = await gateClient.getPositions();
+      const position = positions.find((p: any) => p.contract === contract) || {};
+      const size = Number.parseFloat(position.size || "0");
+      
+      if (size === 0) {
+        return { message: "当前无持仓，无需平仓" };
       }
       
-      const size = -Number.parseInt(targetPos.size);
+      // 2. 下反向单平仓
+      // 平仓数量为持仓数量的相反数
+      const closeSize = -size;
       
-      const order = await client.placeOrder({
-        contract: targetPos.contract,
-        size,
-        price: 0,
-        reduceOnly: true,
-      });
+      const order = await gateClient.placeFuturesOrder(
+        contract,
+        closeSize,
+        0, // 市价
+        { tif: "ioc", reduce_only: true } // 只减仓
+      );
       
       return {
         success: true,
-        message: `平仓指令已发送: ${symbol}, 订单ID ${order.id}`,
-        orderId: String(order.id)
+        orderId: order.id,
+        symbol,
+        action: "close",
+        closedSize: Math.abs(size),
+        pnl: position.realised_pnl || "unknown",
+        timestamp: new Date().toISOString()
       };
     } catch (error: any) {
-      return { success: false, message: `平仓失败: ${error.message}` };
+      return { error: `平仓失败: ${error.message}` };
     }
   },
 });
 
 /**
- * 取消订单工具
+ * 设置止损止盈工具
  */
-export const cancelOrderTool = createTool({
-  name: "cancelOrder",
-  description: "取消指定订单",
+export const createSetStopLossTakeProfitTool = (gateClient: GateClient) => createTool({
+  name: "setStopLossTakeProfit",
+  description: "为当前仓位设置止损和止盈价格",
   parameters: z.object({
-    orderId: z.string().describe("订单ID"),
     symbol: z.enum(RISK_PARAMS.TRADING_SYMBOLS as [string, ...string[]]).describe("币种代码"),
+    stopLossPrice: z.number().positive().optional().describe("止损触发价格"),
+    takeProfitPrice: z.number().positive().optional().describe("止盈触发价格"),
   }),
-  execute: async ({ orderId, symbol }) => {
-    const client = createGateClient();
+  execute: async ({ symbol, stopLossPrice, takeProfitPrice }) => {
     try {
-      const result = await client.cancelOrder(orderId);
-      const safeResult = JSON.parse(JSON.stringify(result, (_, v) => typeof v === 'bigint' ? v.toString() : v));
+      const contract = `${symbol}_USDT`;
+      
+      // 1. 获取当前持仓以确定方向
+      const positions = await gateClient.getPositions();
+      const position = positions.find((p: any) => p.contract === contract) || {};
+      const size = Number.parseFloat(position.size || "0");
+      
+      if (size === 0) {
+        return { error: "当前无持仓，无法设置止损止盈" };
+      }
+      
+      const isLong = size > 0;
+      const results = [];
+      
+      // 2. 设置止损单 (触发后市价平仓)
+      if (stopLossPrice) {
+        // 验证止损价格合理性
+        // 多单止损价应低于当前价，空单止损价应高于当前价 (这里简化，仅提交订单)
+        const slOrder = await gateClient.placePriceTriggerOrder(
+          contract,
+          stopLossPrice,
+          isLong ? "down" : "up", // 触发规则: 多单价格下跌触发，空单价格上涨触发
+          0, // 市价
+          0, // 数量0代表平掉所有仓位(close_long/close_short)
+          { close_position: true }
+        );
+        results.push({ type: "stop_loss", id: slOrder.id, price: stopLossPrice });
+      }
+      
+      // 3. 设置止盈单
+      if (takeProfitPrice) {
+        const tpOrder = await gateClient.placePriceTriggerOrder(
+          contract,
+          takeProfitPrice,
+          isLong ? "up" : "down", // 触发规则: 多单价格上涨触发，空单价格下跌触发
+          0, // 市价
+          0, // 数量0代表平掉所有仓位
+          { close_position: true }
+        );
+        results.push({ type: "take_profit", id: tpOrder.id, price: takeProfitPrice });
+      }
+      
       return {
         success: true,
-        message: `订单已取消: ${orderId}`,
-        result: safeResult
+        symbol,
+        orders: results
       };
     } catch (error: any) {
-      return { success: false, message: `取消订单失败: ${error.message}` };
+      return { error: `设置止损止盈失败: ${error.message}` };
+    }
+  },
+});
+
+/**
+ * 取消所有订单工具
+ */
+export const createCancelAllOrdersTool = (gateClient: GateClient) => createTool({
+  name: "cancelAllOrders",
+  description: "取消指定币种的所有挂单",
+  parameters: z.object({
+    symbol: z.enum(RISK_PARAMS.TRADING_SYMBOLS as [string, ...string[]]).describe("币种代码"),
+  }),
+  execute: async ({ symbol }) => {
+    try {
+      const contract = `${symbol}_USDT`;
+      const result = await gateClient.cancelAllFuturesOrders(contract);
+      return {
+        success: true,
+        symbol,
+        result
+      };
+    } catch (error: any) {
+      return { error: `取消订单失败: ${error.message}` };
     }
   },
 });

@@ -20,7 +20,7 @@ import cron from "node-cron";
 import { createPinoLogger } from "@voltagent/logger";
 import { createClient } from "@libsql/client";
 import { GateClient } from "../services/gateClient";
-import { createToolsForEngine } from "../tools/trading/factory";
+import { createTradingTools } from "../tools/trading/factory";
 import { Agent, Memory } from "@voltagent/core";
 import { LibSQLMemoryAdapter } from "@voltagent/libsql";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
@@ -92,7 +92,7 @@ export class AgentRunner {
     });
 
     // 创建绑定了特定 GateClient 的工具集
-    const tools = createToolsForEngine(this.gateClient, config.id);
+    const tools = createTradingTools(this.gateClient);
 
     // 使用详细的策略指令生成 System Prompt
     // 默认执行间隔为 1 分钟 (与 cron 调度一致)

@@ -20,7 +20,8 @@
  * GATE.IO API Client Wrapper
  */
 // @ts-ignore - gate-api type definitions might be incomplete
-import * as GateApi from "gate-api";
+// import * as GateApi from "gate-api";
+import { GateApiLocal } from "./gateApiLocal";
 import { createPinoLogger } from "@voltagent/logger";
 import { RISK_PARAMS } from "../config/riskParams";
 
@@ -30,49 +31,17 @@ const logger = createPinoLogger({
 });
 
 export class GateClient {
-  private readonly client: any;
-  private readonly newClient: any;
+  private readonly client: GateApiLocal;
   private readonly futuresApi: any;
 
-  
-  private readonly newFuturesApi: any;
-  private readonly spotApi: any;
+  // private readonly spotApi: any;
   private readonly settle = "usdt"; // Use USDT settlement
 
   constructor(apiKey: string, apiSecret: string) {
     // @ts-ignore
-    this.client = new GateApi.ApiClient();
-
-     // @ts-ignore
-    this.newClient = new GateApi.ApiClient();
-
-    
-    // Decide whether to use testnet or mainnet based on environment variables
-    const isTestnet = process.env.GATE_USE_TESTNET === "true";
-    if (isTestnet) {
-      // this.client.basePath = "https://api.gateapi.io/api/v4"; 
-       this.client.basePath = "http://127.0.0.1:8998/api/v4";
-      this.newClient.basePath = "http://127.0.0.1:8998/api/v4";
-      logger.info("Using GATE testnet");
-    } else {
-      // Mainnet address (default)
-      this.client.basePath = "https://api-testnet.gateapi.io/api/v4";
-      this.newClient.basePath = "https://api.gateio.ws/api/v4";
-    }
-    
-    this.client.setApiKeySecret(apiKey, apiSecret);
-    this.newClient.setApiKeySecret(apiKey, apiSecret); // Ensure newClient also gets credentials
-
+    this.client = new GateApiLocal(apiKey, apiSecret, "http://127.0.0.1:8998/api/v4");
     // @ts-ignore
-    this.futuresApi = new GateApi.FuturesApi(this.client);
-
- // @ts-ignore
-    this.newFuturesApi = new GateApi.FuturesApi(this.newClient);
-
-    // @ts-ignore
-    this.spotApi = new GateApi.SpotApi(this.client);
-
-    // logger.info("GATE API client initialized successfully"); // Reduce log noise
+    this.futuresApi = this.client.futures;
   }
 
   /**
@@ -83,7 +52,7 @@ export class GateClient {
     
     for (let i = 0; i <= retries; i++) {
       try {
-        const result = await this.newFuturesApi.listFuturesTickers(this.settle, {
+        const result = await this.futuresApi.listFuturesTickers(this.settle, {
           contract,
         });
             
@@ -114,7 +83,7 @@ export class GateClient {
     
     for (let i = 0; i <= retries; i++) {
       try {
-        const result = await this.newFuturesApi.listFuturesCandlesticks(
+        const result = await this.futuresApi.listFuturesCandlesticks(
           this.settle,
           contract,
           {
@@ -577,6 +546,90 @@ export class GateClient {
       throw error;
     }
   }
+
+  /**
+   * Place futures order (wrapper for placeOrder to match tool expectations)
+   */
+  async placeFuturesOrder(
+    contract: string,
+    size: number,
+    price: number = 0,
+    options: { tif?: string; reduce_only?: boolean; auto_size?: string } = {}
+  ) {
+    return this.placeOrder({
+      contract,
+      size,
+      price,
+      tif: options.tif,
+      reduceOnly: options.reduce_only,
+      autoSize: options.auto_size,
+    });
+  }
+
+  /**
+   * Place price triggered order (Stop Loss / Take Profit)
+   */
+  async placePriceTriggerOrder(
+    contract: string,
+    triggerPrice: number,
+    rule: "up" | "down",
+    orderPrice: number = 0,
+    orderSize: number = 0,
+    options: { close_position?: boolean } = {}
+  ) {
+    try {
+      // Gate API rule: 1 for >= (up), 2 for <= (down)
+      const ruleId = rule === "up" ? 1 : 2;
+      
+      const triggerOrder = {
+        initial: {
+          contract,
+          size: 0, 
+          price: "0",
+        },
+        trigger: {
+          strategy_type: 0, // 0: price trigger
+          price_type: 0, // 0: last price, 1: mark price, 2: index price
+          price: triggerPrice.toString(),
+          rule: ruleId,
+          expiration: 86400 * 30, // 30 days
+        },
+        order: {
+          contract,
+          size: orderSize, 
+          price: orderPrice === 0 ? "0" : orderPrice.toString(),
+          tif: "ioc", 
+          is_close: options.close_position,
+        }
+      };
+
+      const result = await this.futuresApi.createFuturesPriceTriggeredOrder(
+        this.settle,
+        triggerOrder
+      );
+      return { id: result.body.id }; 
+    } catch (error: any) {
+       logger.error(`Failed to place trigger order:`, error);
+       throw error;
+    }
+  }
+
+  /**
+   * Cancel all futures orders for a contract
+   */
+  async cancelAllFuturesOrders(contract: string) {
+    try {
+      const result = await this.futuresApi.cancelFuturesOrders(
+        this.settle,
+        contract,
+        {}
+      );
+      return result.body;
+    } catch (error: any) {
+      logger.error(`Failed to cancel all orders for ${contract}:`, error);
+      throw error;
+    }
+  }
 }
 
 /**
@@ -587,14 +640,10 @@ let gateClientInstance: GateClient | null = null;
 /**
  * Create global GATE client instance (Singleton pattern)
  */
-export function createGateClient(apiKey?: string, apiSecret?: string) {
-  // 优先使用传入的 Key，如果没有则尝试使用环境变量（兼容旧模式或测试）
-  const key = apiKey || process.env.GATE_API_KEY || "";
-  const secret = apiSecret || process.env.GATE_API_SECRET || "";
-  
-  if (!key || !secret) {
+export function createGateClient(apiKey: string, apiSecret: string) {
+  if (!apiKey || !apiSecret) {
     throw new Error("Gate API Key/Secret is required");
   }
   
-  return new GateClient(key, secret);
+  return new GateClient(apiKey, apiSecret);
 }

@@ -71,7 +71,7 @@ async function syncPositionsOnly() {
     }
     
     // 3. 从 Gate.io 获取持仓
-    const gateClient = createGateClient();
+    const gateClient = createGateClient(process.env.GATE_API_KEY || "", process.env.GATE_API_SECRET || "");
     const positions = await gateClient.getPositions();
     const activePositions = positions.filter((p: any) => Number.parseInt(p.size || "0") !== 0);
     

@@ -21,7 +21,7 @@
  */
 import { createTool } from "@voltagent/core";
 import { z } from "zod";
-import { createGateClient } from "../../services/gateClient";
+import { GateClient } from "../../services/gateClient";
 import { createClient } from "@libsql/client";
 import { RISK_PARAMS } from "../../config/riskParams";
 
@@ -32,15 +32,13 @@ const dbClient = createClient({
 /**
  * 获取账户余额工具
  */
-export const getAccountBalanceTool = createTool({
+export const createGetAccountBalanceTool = (gateClient: GateClient) => createTool({
   name: "getAccountBalance",
   description: "获取账户余额和资金信息",
   parameters: z.object({}),
   execute: async () => {
-    const client = createGateClient();
-    
     try {
-      const account = await client.getFuturesAccount();
+      const account = await gateClient.getFuturesAccount();
       
       return {
         currency: account.currency,
@@ -63,15 +61,13 @@ export const getAccountBalanceTool = createTool({
 /**
  * 获取当前持仓工具
  */
-export const getPositionsTool = createTool({
+export const createGetPositionsTool = (gateClient: GateClient) => createTool({
   name: "getPositions",
   description: "获取当前所有持仓信息",
   parameters: z.object({}),
   execute: async () => {
-    const client = createGateClient();
-    
     try {
-      const positions = await client.getPositions();
+      const positions = await gateClient.getPositions();
       
       const formattedPositions = positions
         .filter((p: any) => Number.parseFloat(p.size || "0") !== 0)
@@ -105,18 +101,16 @@ export const getPositionsTool = createTool({
 /**
  * 获取未成交订单工具
  */
-export const getOpenOrdersTool = createTool({
+export const createGetOpenOrdersTool = (gateClient: GateClient) => createTool({
   name: "getOpenOrders",
   description: "获取所有未成交的挂单",
   parameters: z.object({
-    symbol: z.enum(RISK_PARAMS.TRADING_SYMBOLS).optional().describe("可选：仅获取指定币种的订单"),
+    symbol: z.enum(RISK_PARAMS.TRADING_SYMBOLS as [string, ...string[]]).optional().describe("可选：仅获取指定币种的订单"),
   }),
   execute: async ({ symbol }) => {
-    const client = createGateClient();
-    
     try {
       const contract = symbol ? `${symbol}_USDT` : undefined;
-      const orders = await client.getOpenOrders(contract);
+      const orders = await gateClient.getOpenOrders(contract);
       
       const formattedOrders = orders.map((o: any) => ({
         orderId: o.id?.toString(),
@@ -147,17 +141,15 @@ export const getOpenOrdersTool = createTool({
 /**
  * 检查订单状态工具
  */
-export const checkOrderStatusTool = createTool({
+export const createCheckOrderStatusTool = (gateClient: GateClient) => createTool({
   name: "checkOrderStatus",
   description: "检查指定订单的详细状态，包括成交价格、成交数量等",
   parameters: z.object({
     orderId: z.string().describe("订单ID"),
   }),
   execute: async ({ orderId }) => {
-    const client = createGateClient();
-    
     try {
-      const orderDetail = await client.getOrder(orderId);
+      const orderDetail = await gateClient.getOrder(orderId);
       
       const totalSize = Math.abs(Number.parseInt(orderDetail.size || "0"));
       const leftSize = Math.abs(Number.parseInt(orderDetail.left || "0"));
@@ -193,17 +185,15 @@ export const checkOrderStatusTool = createTool({
 /**
  * 计算风险敞口工具
  */
-export const calculateRiskTool = createTool({
+export const createCalculateRiskTool = (gateClient: GateClient) => createTool({
   name: "calculateRisk",
   description: "计算当前账户的风险敞口和仓位情况",
   parameters: z.object({}),
   execute: async () => {
-    const client = createGateClient();
-    
     try {
       const [account, positions] = await Promise.all([
-        client.getFuturesAccount(),
-        client.getPositions(),
+        gateClient.getFuturesAccount(),
+        gateClient.getPositions(),
       ]);
       
       // account.total 包含了未实现盈亏，需要减去以得到实际总资产
@@ -226,7 +216,7 @@ export const calculateRiskTool = createTool({
           // 获取合约乘数（修复：正确计算名义价值）
           let quantoMultiplier = 0.01; // 默认值
           try {
-            const contractInfo = await client.getContractInfo(p.contract);
+            const contractInfo = await gateClient.getContractInfo(p.contract);
             quantoMultiplier = Number.parseFloat(contractInfo.quantoMultiplier || "0.01");
           } catch (error: any) {
             // 使用默认值
@@ -301,18 +291,21 @@ export const calculateRiskTool = createTool({
 /**
  * 同步持仓到数据库工具
  */
-export const syncPositionsTool = createTool({
+export const createSyncPositionsTool = (gateClient: GateClient, engineId: number = 1) => createTool({
   name: "syncPositions",
   description: "同步交易所持仓数据到本地数据库",
   parameters: z.object({}),
   execute: async () => {
-    const client = createGateClient();
-    
     try {
-      const positions = await client.getPositions();
+      const positions = await gateClient.getPositions();
       
-      // 清空本地持仓表
-      await dbClient.execute("DELETE FROM positions");
+      // 清空本地持仓表 (TODO: 应该只清空当前 engine 的持仓)
+      // await dbClient.execute("DELETE FROM positions WHERE engine_id = ?", [engineId]);
+      // 暂时保持原样，但加上 engineId
+      await dbClient.execute({
+        sql: "DELETE FROM positions WHERE engine_id = ?",
+        args: [engineId]
+      });
       
       // 插入当前持仓
       for (const p of positions) {
@@ -329,7 +322,7 @@ export const syncPositionsTool = createTool({
                  leverage, side, entry_order_id, opened_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           args: [
-            1, // engine_id
+            engineId,
             symbol,
             Math.abs(size),
             Number.parseFloat(pos.entryPrice || "0"),

@@ -23,7 +23,8 @@ import { Agent, Memory } from "@voltagent/core";
 import { LibSQLMemoryAdapter } from "@voltagent/libsql";
 import { createPinoLogger } from "@voltagent/logger";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
-import * as tradingTools from "../tools/trading";
+import { createTradingTools } from "../tools/trading";
+import { GateClient } from "../services/gateClient";
 import { formatChinaTime } from "../utils/timeUtils";
 import { RISK_PARAMS } from "../config/riskParams";
 import { createOpenAI } from "@ai-sdk/openai"; 
@@ -91,7 +92,7 @@ export interface AgentRequestConfig {
 /**
  * Create an agent instance dynamically based on request context
  */
-export function createDynamicAgent(config: AgentRequestConfig) {
+export function createDynamicAgent(config: AgentRequestConfig, gateClient: GateClient) {
   // 1. Dynamic Model Selection
   const openrouter = createOpenRouter({
     apiKey: process.env.OPENROUTER_API_KEY || "",
@@ -117,21 +118,7 @@ export function createDynamicAgent(config: AgentRequestConfig) {
     model,
     memory,
     instructions,
-    tools: [
-      tradingTools.getMarketPriceTool,
-      tradingTools.getTechnicalIndicatorsTool,
-      tradingTools.getFundingRateTool,
-      tradingTools.getOrderBookTool,
-      tradingTools.openPositionTool,
-      tradingTools.closePositionTool,
-      tradingTools.cancelOrderTool,
-      tradingTools.getAccountBalanceTool,
-      tradingTools.getPositionsTool,
-      tradingTools.getOpenOrdersTool,
-      tradingTools.checkOrderStatusTool,
-      tradingTools.calculateRiskTool,
-      tradingTools.syncPositionsTool,
-    ],
+    tools: createTradingTools(gateClient),
   });
 }
 
@@ -688,7 +675,7 @@ export function generateInstructions(strategy: TradingStrategy, intervalMinutes:
 /**
  * 创建交易 Agent
  */
-export function createTradingAgent(intervalMinutes: number = 5) {
+export function createTradingAgent(gateClient: GateClient, intervalMinutes: number = 5) {
   const openrouter = createOpenRouter({
     apiKey: process.env.OPENROUTER_API_KEY || "",
   });
@@ -722,21 +709,7 @@ export function createTradingAgent(intervalMinutes: number = 5) {
     instructions: generateInstructions(strategy, intervalMinutes),
     // model: customProvider.chat(modelName),
     model: openrouter.chat(process.env.AI_MODEL_NAME || "deepseek/deepseek-v3.2-exp"),
-    tools: [
-      tradingTools.getMarketPriceTool,
-      tradingTools.getTechnicalIndicatorsTool,
-      tradingTools.getFundingRateTool,
-      tradingTools.getOrderBookTool,
-      tradingTools.openPositionTool,
-      tradingTools.closePositionTool,
-      tradingTools.cancelOrderTool,
-      tradingTools.getAccountBalanceTool,
-      tradingTools.getPositionsTool,
-      tradingTools.getOpenOrdersTool,
-      tradingTools.checkOrderStatusTool,
-      tradingTools.calculateRiskTool,
-      tradingTools.syncPositionsTool,
-    ],
+    tools: createTradingTools(gateClient),
     memory,
   });
 
