@@ -20,15 +20,16 @@ import cron from "node-cron";
 import { createPinoLogger } from "@voltagent/logger";
 import { createClient } from "@libsql/client";
 import { GateClient } from "../services/gateClient";
+import { GateApiLocal } from "../services/gateApiLocal";
 import { createTradingTools } from "../tools/trading/factory";
 import { Agent, Memory } from "@voltagent/core";
 import { LibSQLMemoryAdapter } from "@voltagent/libsql";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { generateTradingPrompt, generateInstructions, TradingStrategy } from "../agents/tradingAgent";
 import { RISK_PARAMS } from "../config/riskParams";
-import { 
-  calculateIndicators, 
-  calculateIntradaySeries, 
+import {
+  calculateIndicators,
+  calculateIntradaySeries,
   calculateLongerTermContext,
   ensureFinite,
   ensureRange
@@ -57,6 +58,7 @@ export interface EngineConfig {
 export class AgentRunner {
   private config: EngineConfig;
   private gateClient: GateClient;
+  private backendBaseClient: GateApiLocal;
   private agent: Agent;
   private cronTask: cron.ScheduledTask | null = null;
   private isRunning: boolean = false;
@@ -69,20 +71,24 @@ export class AgentRunner {
     this.config = config;
     this.gateClient = new GateClient(config.apiKey, config.apiSecret);
 
+    // 创建 backend-base API 客户端（用于账户和持仓查询）
+    const backendBaseUrl = process.env.BACKEND_BASE_URL || "http://127.0.0.1:8998/api/v4";
+    this.backendBaseClient = new GateApiLocal(config.apiKey, config.apiSecret, backendBaseUrl);
+
     // Initialize symbols from config or default
     if (config.riskParams && config.riskParams.symbols && Array.isArray(config.riskParams.symbols) && config.riskParams.symbols.length > 0) {
       this.SYMBOLS = config.riskParams.symbols;
     } else {
       this.SYMBOLS = [...RISK_PARAMS.TRADING_SYMBOLS];
     }
-    
+
     // 初始化 Agent
     const openrouter = createOpenRouter({
       apiKey: process.env.OPENROUTER_API_KEY || "",
     });
-    
+
     const model = openrouter.chat(config.modelName || "deepseek/deepseek-v3.2-exp");
-    
+
     const memory = new Memory({
       storage: new LibSQLMemoryAdapter({
         url: process.env.DATABASE_URL || "file:./.voltagent/trading.db",
@@ -91,8 +97,8 @@ export class AgentRunner {
       // 暂时移除 namespace，LibSQLMemoryAdapter 内部可能需要支持 session_id 来区分
     });
 
-    // 创建绑定了特定 GateClient 的工具集
-    const tools = createTradingTools(this.gateClient);
+    // 创建工具集（传入 gateClient 和 backendBaseClient）
+    const tools = createTradingTools(this.gateClient, this.backendBaseClient);
 
     // 使用详细的策略指令生成 System Prompt
     // 默认执行间隔为 1 分钟 (与 cron 调度一致)
@@ -148,6 +154,15 @@ export class AgentRunner {
 
     logger.info(`Engine ${this.config.id} stopped`);
     this.updateStatus("stopped");
+  }
+
+  /**
+   * 销毁引擎资源
+   */
+  public destroy() {
+    this.stop();
+    // 不需要额外清理，GateApiLocal 实例会随 AgentRunner 一起销毁
+    logger.info(`Engine ${this.config.id} destroyed`);
   }
 
   /**
@@ -216,94 +231,13 @@ export class AgentRunner {
 
   /**
    * Sync positions from Gate.io to database
+   * 注意：由于现在使用 backend-base，positions 数据不再存储在本地数据库
+   * 这个方法已废弃，保留接口以兼容性
    */
   private async syncPositionsFromGate(cachedPositions?: any[]) {
-    try {
-      const gatePositions = cachedPositions || await this.gateClient.getPositions();
-      
-      // Get existing positions from DB for this engine
-      const dbResult = await dbClient.execute({
-        sql: "SELECT symbol, sl_order_id, tp_order_id, stop_loss, profit_target, entry_order_id, opened_at, peak_pnl_percent FROM positions WHERE engine_id = ?",
-        args: [this.config.id]
-      });
-      const dbPositionsMap = new Map(
-        dbResult.rows.map((row: any) => [row.symbol, row])
-      );
-      
-      // Check if Gate.io has positions
-      const activeGatePositions = gatePositions.filter((p: any) => Number.parseInt(p.size || "0") !== 0);
-      
-      // Safety check: if API returns 0 but DB has many, might be API error
-      if (activeGatePositions.length === 0 && dbResult.rows.length > 0) {
-        logger.warn(`[Engine ${this.config.id}] Gate.io returned 0 positions, but DB has ${dbResult.rows.length}. Skipping sync.`);
-        return;
-      }
-      
-      // Delete existing positions for this engine
-      await dbClient.execute({
-        sql: "DELETE FROM positions WHERE engine_id = ?",
-        args: [this.config.id]
-      });
-      
-      for (const pos of gatePositions) {
-        const size = Number.parseInt(pos.size || "0");
-        if (size === 0) continue;
-        
-        const symbol = pos.contract.replace("_USDT", "");
-        let entryPrice = Number.parseFloat(pos.entryPrice || "0");
-        let currentPrice = Number.parseFloat(pos.markPrice || "0");
-        const leverage = Number.parseInt(pos.leverage || "1");
-        const side = size > 0 ? "long" : "short";
-        const quantity = Math.abs(size);
-        const unrealizedPnl = Number.parseFloat(pos.unrealisedPnl || "0");
-        let liquidationPrice = Number.parseFloat(pos.liqPrice || "0");
-        
-        // Fallback for prices
-        if (entryPrice === 0 || currentPrice === 0) {
-          try {
-            const ticker = await this.gateClient.getFuturesTicker(pos.contract);
-            if (currentPrice === 0) currentPrice = Number.parseFloat(ticker.markPrice || ticker.last || "0");
-            if (entryPrice === 0) entryPrice = currentPrice;
-          } catch (e) {}
-        }
-        
-        if (liquidationPrice === 0 && entryPrice > 0) {
-          liquidationPrice = side === "long" 
-            ? entryPrice * (1 - 0.9 / leverage)
-            : entryPrice * (1 + 0.9 / leverage);
-        }
-        
-        const dbPos = dbPositionsMap.get(symbol);
-        const entryOrderId = dbPos?.entry_order_id || `synced-${symbol}-${Date.now()}`;
-        
-        await dbClient.execute({
-          sql: `INSERT INTO positions 
-                (engine_id, symbol, quantity, entry_price, current_price, liquidation_price, unrealized_pnl, 
-                 leverage, side, stop_loss, profit_target, sl_order_id, tp_order_id, entry_order_id, opened_at, peak_pnl_percent)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          args: [
-            this.config.id,
-            symbol,
-            quantity,
-            entryPrice,
-            currentPrice,
-            liquidationPrice,
-            unrealizedPnl,
-            leverage,
-            side,
-            dbPos?.stop_loss || null,
-            dbPos?.profit_target || null,
-            dbPos?.sl_order_id || null,
-            dbPos?.tp_order_id || null,
-            entryOrderId,
-            dbPos?.opened_at || new Date().toISOString(),
-            dbPos?.peak_pnl_percent || 0
-          ],
-        });
-      }
-    } catch (error) {
-      logger.error(`[Engine ${this.config.id}] Failed to sync positions:`, error as any);
-    }
+    // Positions 数据现在直接从 backend-base 获取，无需同步到本地数据库
+    // 这个方法不再执行任何操作
+    return;
   }
 
   /**
@@ -442,49 +376,28 @@ export class AgentRunner {
       const currentPrice = pos.current_price;
       
       // Calculate PnL percent (considering leverage)
-      const priceChangePercent = entryPrice > 0 
+      const priceChangePercent = entryPrice > 0
         ? ((currentPrice - entryPrice) / entryPrice * 100 * (side === 'long' ? 1 : -1))
         : 0;
       const pnlPercent = priceChangePercent * leverage;
-      
-      // Get and update peak profit
-      let peakPnlPercent = 0;
-      try {
-        const dbPosResult = await dbClient.execute({
-          sql: "SELECT peak_pnl_percent FROM positions WHERE symbol = ? AND engine_id = ?",
-          args: [symbol, this.config.id],
-        });
-        
-        if (dbPosResult.rows.length > 0) {
-          peakPnlPercent = Number.parseFloat(dbPosResult.rows[0].peak_pnl_percent as string || "0");
-          
-          // If current PnL exceeds historical peak, update it
-          if (pnlPercent > peakPnlPercent) {
-            peakPnlPercent = pnlPercent;
-            await dbClient.execute({
-              sql: "UPDATE positions SET peak_pnl_percent = ? WHERE symbol = ? AND engine_id = ?",
-              args: [peakPnlPercent, symbol, this.config.id],
-            });
-            logger.info(`[Engine ${this.config.id}] ${symbol} Peak profit updated: ${peakPnlPercent.toFixed(2)}%`);
-          }
-        }
-      } catch (error: any) {
-        logger.warn(`[Engine ${this.config.id}] Failed to get peak profit for ${symbol}: ${error.message}`);
-      }
-      
+
+      // 注意：peak_pnl_percent 追踪功能已禁用，因为不再使用本地 positions 表
+      // 简化处理：使用当前 pnlPercent 作为判断依据
+      const peakPnlPercent = pnlPercent;
+
       let shouldClose = false;
       let closeReason = "";
-      
+
       // a) 36-hour forced close check
       const openedTime = new Date(pos.opened_at);
       const now = new Date();
       const holdingHours = (now.getTime() - openedTime.getTime()) / (1000 * 60 * 60);
-      
+
       if (holdingHours >= 36) {
         shouldClose = true;
         closeReason = `Holding time reached ${holdingHours.toFixed(1)} hours, exceeding 36-hour limit`;
       }
-      
+
       // b) Dynamic stop loss check (based on leverage)
       let stopLossPercent = -5; // Default
       if (leverage >= 12) {
@@ -494,7 +407,7 @@ export class AgentRunner {
       } else {
         stopLossPercent = -5;
       }
-      
+
       if (pnlPercent <= stopLossPercent) {
         shouldClose = true;
         closeReason = `Dynamic stop loss triggered (${pnlPercent.toFixed(2)}% ≤ ${stopLossPercent}%)`;
@@ -624,13 +537,8 @@ export class AgentRunner {
           } catch (dbError: any) {
             logger.error(`[Engine ${this.config.id}] ❌ Failed to record forced close trade: ${dbError.message}`);
           }
-          
-          // 4. Delete position from DB
-          await dbClient.execute({
-            sql: "DELETE FROM positions WHERE symbol = ? AND engine_id = ?",
-            args: [symbol, this.config.id],
-          });
-          
+
+          // 注意：不再需要从数据库删除 position，因为数据现在存储在 backend-base
           logger.info(`[Engine ${this.config.id}] ✅ Forced close completed ${symbol}, Reason: ${closeReason}`);
           positionsChanged = true;
           

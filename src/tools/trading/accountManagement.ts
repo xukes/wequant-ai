@@ -1,17 +1,17 @@
 /**
  * open-nof1.ai - AI 加密货币自动交易系统
  * Copyright (C) 2025 195440
- * 
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Affero General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
@@ -21,32 +21,29 @@
  */
 import { createTool } from "@voltagent/core";
 import { z } from "zod";
-import { GateClient } from "../../services/gateClient";
-import { createClient } from "@libsql/client";
+import { GateApiLocal } from "../../services/gateApiLocal";
 import { RISK_PARAMS } from "../../config/riskParams";
 
-const dbClient = createClient({
-  url: process.env.DATABASE_URL || "file:./.voltagent/trading.db",
-});
-
 /**
- * 获取账户余额工具
+ * 创建账户管理工具
+ * @param backendClient Backend-base API 客户端（使用 GateApiLocal）
  */
-export const createGetAccountBalanceTool = (gateClient: GateClient) => createTool({
+export const createGetAccountBalanceTool = (backendClient: GateApiLocal) => createTool({
   name: "getAccountBalance",
   description: "获取账户余额和资金信息",
   parameters: z.object({}),
   execute: async () => {
     try {
-      const account = await gateClient.getFuturesAccount();
-      
+      // 使用 backend-base API 获取账户信息
+      const result = await backendClient.futures.listFuturesAccounts('usdt');
+
       return {
-        currency: account.currency,
-        totalBalance: Number.parseFloat(account.total || "0"),
-        availableBalance: Number.parseFloat(account.available || "0"),
-        positionMargin: Number.parseFloat(account.positionMargin || "0"),
-        orderMargin: Number.parseFloat(account.orderMargin || "0"),
-        unrealisedPnl: Number.parseFloat(account.unrealisedPnl || "0"),
+        currency: "USDT",
+        totalBalance: Number.parseFloat(result.body.total || "0"),
+        availableBalance: Number.parseFloat(result.body.available || "0"),
+        positionMargin: Number.parseFloat(result.body.positionMargin || "0"),
+        orderMargin: Number.parseFloat(result.body.orderMargin || "0"),
+        unrealisedPnl: Number.parseFloat(result.body.unrealisedPnl || "0"),
         timestamp: new Date().toISOString(),
       };
     } catch (error: any) {
@@ -61,16 +58,18 @@ export const createGetAccountBalanceTool = (gateClient: GateClient) => createToo
 /**
  * 获取当前持仓工具
  */
-export const createGetPositionsTool = (gateClient: GateClient) => createTool({
+export const createGetPositionsTool = (backendClient: GateApiLocal) => createTool({
   name: "getPositions",
   description: "获取当前所有持仓信息",
   parameters: z.object({}),
   execute: async () => {
     try {
-      const positions = await gateClient.getPositions();
-      
+      // 使用 backend-base API 获取持仓
+      const result = await backendClient.futures.listPositions('usdt');
+      const positions = result.body || [];
+
       const formattedPositions = positions
-        .filter((p: any) => Number.parseFloat(p.size || "0") !== 0)
+        .filter((p: any) => Number.parseInt(p.size || "0") !== 0)
         .map((p: any) => ({
           contract: p.contract,
           size: Number.parseFloat(p.size || "0"),
@@ -79,11 +78,11 @@ export const createGetPositionsTool = (gateClient: GateClient) => createTool({
           markPrice: Number.parseFloat(p.markPrice || "0"),
           liquidationPrice: Number.parseFloat(p.liqPrice || "0"),
           unrealisedPnl: Number.parseFloat(p.unrealisedPnl || "0"),
-          realisedPnl: Number.parseFloat(p.realisedPnl || "0"),
+          realisedPnl: 0,
           margin: Number.parseFloat(p.margin || "0"),
           side: Number.parseFloat(p.size || "0") > 0 ? "long" : "short",
         }));
-      
+
       return {
         positions: formattedPositions,
         count: formattedPositions.length,
@@ -101,7 +100,7 @@ export const createGetPositionsTool = (gateClient: GateClient) => createTool({
 /**
  * 获取未成交订单工具
  */
-export const createGetOpenOrdersTool = (gateClient: GateClient) => createTool({
+export const createGetOpenOrdersTool = (backendClient: GateApiLocal) => createTool({
   name: "getOpenOrders",
   description: "获取所有未成交的挂单",
   parameters: z.object({
@@ -110,8 +109,9 @@ export const createGetOpenOrdersTool = (gateClient: GateClient) => createTool({
   execute: async ({ symbol }) => {
     try {
       const contract = symbol ? `${symbol}_USDT` : undefined;
-      const orders = await gateClient.getOpenOrders(contract);
-      
+      const result = await backendClient.futures.listFuturesOrders('usdt', 'open', contract ? { contract } : {});
+      const orders = result.body || [];
+
       const formattedOrders = orders.map((o: any) => ({
         orderId: o.id?.toString(),
         contract: o.contract,
@@ -120,10 +120,10 @@ export const createGetOpenOrdersTool = (gateClient: GateClient) => createTool({
         left: Number.parseInt(o.left || "0"),
         status: o.status,
         side: Number.parseInt(o.size || "0") > 0 ? "long" : "short",
-        isReduceOnly: o.is_reduce_only,
-        createdAt: o.create_time,
+        isReduceOnly: o.isReduceOnly,
+        createdAt: o.createTime,
       }));
-      
+
       return {
         orders: formattedOrders,
         count: formattedOrders.length,
@@ -141,7 +141,7 @@ export const createGetOpenOrdersTool = (gateClient: GateClient) => createTool({
 /**
  * 检查订单状态工具
  */
-export const createCheckOrderStatusTool = (gateClient: GateClient) => createTool({
+export const createCheckOrderStatusTool = (backendClient: GateApiLocal) => createTool({
   name: "checkOrderStatus",
   description: "检查指定订单的详细状态，包括成交价格、成交数量等",
   parameters: z.object({
@@ -149,28 +149,29 @@ export const createCheckOrderStatusTool = (gateClient: GateClient) => createTool
   }),
   execute: async ({ orderId }) => {
     try {
-      const orderDetail = await gateClient.getOrder(orderId);
-      
-      const totalSize = Math.abs(Number.parseInt(orderDetail.size || "0"));
-      const leftSize = Math.abs(Number.parseInt(orderDetail.left || "0"));
+      const result = await backendClient.futures.getFuturesOrder('usdt', orderId);
+      const order = result.body;
+
+      const totalSize = Math.abs(Number.parseInt(order.size || "0"));
+      const leftSize = Math.abs(Number.parseInt(order.left || "0"));
       const filledSize = totalSize - leftSize;
-      const fillPrice = Number.parseFloat(orderDetail.fill_price || orderDetail.price || "0");
-      
+      const fillPrice = Number.parseFloat(order.fillPrice || order.price || "0");
+
       return {
         success: true,
-        orderId: orderDetail.id?.toString(),
-        contract: orderDetail.contract,
-        status: orderDetail.status,
+        orderId: order.id?.toString(),
+        contract: order.contract,
+        status: order.status,
         totalSize,
         filledSize,
         leftSize,
         fillPrice,
-        price: Number.parseFloat(orderDetail.price || "0"),
-        createdAt: orderDetail.create_time,
-        finishedAt: orderDetail.finish_time,
+        price: Number.parseFloat(order.price || "0"),
+        createdAt: order.createTime,
+        finishedAt: order.finishTime,
         isFullyFilled: leftSize === 0,
         fillPercentage: totalSize > 0 ? (filledSize / totalSize * 100).toFixed(2) : "0",
-        message: `订单 ${orderId} 状态: ${orderDetail.status}, 已成交 ${filledSize}/${totalSize} 张 (${totalSize > 0 ? (filledSize / totalSize * 100).toFixed(1) : '0'}%), 成交价 ${fillPrice}`,
+        message: `订单 ${orderId} 状态: ${order.status}, 已成交 ${filledSize}/${totalSize} 张 (${totalSize > 0 ? (filledSize / totalSize * 100).toFixed(1) : '0'}%), 成交价 ${fillPrice}`,
       };
     } catch (error: any) {
       return {
@@ -185,80 +186,70 @@ export const createCheckOrderStatusTool = (gateClient: GateClient) => createTool
 /**
  * 计算风险敞口工具
  */
-export const createCalculateRiskTool = (gateClient: GateClient) => createTool({
+export const createCalculateRiskTool = (backendClient: GateApiLocal) => createTool({
   name: "calculateRisk",
   description: "计算当前账户的风险敞口和仓位情况",
   parameters: z.object({}),
   execute: async () => {
     try {
-      const [account, positions] = await Promise.all([
-        gateClient.getFuturesAccount(),
-        gateClient.getPositions(),
+      // 使用 backend-base API 获取账户和持仓数据
+      const [accountResult, positionsResult] = await Promise.all([
+        backendClient.futures.listFuturesAccounts('usdt'),
+        backendClient.futures.listPositions('usdt'),
       ]);
-      
-      // account.total 包含了未实现盈亏，需要减去以得到实际总资产
+
+      const account = accountResult.body;
+      const positions = positionsResult.body || [];
+
+      // 从响应中解析数据
       const unrealisedPnl = Number.parseFloat(account.unrealisedPnl || "0");
       const totalBalance = Number.parseFloat(account.total || "0") - unrealisedPnl;
       const availableBalance = Number.parseFloat(account.available || "0");
-      
-      // 计算每个持仓的风险（需要异步获取合约乘数）
-      const activePositions = positions.filter((p: any) => Number.parseFloat(p.size || "0") !== 0);
-      
-      const positionRisks = await Promise.all(
-        activePositions.map(async (p: any) => {
-          const size = Math.abs(Number.parseFloat(p.size || "0"));
-          const entryPrice = Number.parseFloat(p.entryPrice || "0");
-          const leverage = Number.parseInt(p.leverage || "1");
-          const liquidationPrice = Number.parseFloat(p.liqPrice || "0");
-          const currentPrice = Number.parseFloat(p.markPrice || "0");
-          const pnl = Number.parseFloat(p.unrealisedPnl || "0");
-          
-          // 获取合约乘数（修复：正确计算名义价值）
-          let quantoMultiplier = 0.01; // 默认值
-          try {
-            const contractInfo = await gateClient.getContractInfo(p.contract);
-            quantoMultiplier = Number.parseFloat(contractInfo.quantoMultiplier || "0.01");
-          } catch (error: any) {
-            // 使用默认值
-          }
-          
-          // 正确计算名义价值：张数 × 入场价格 × 合约乘数
-          const notionalValue = size * entryPrice * quantoMultiplier;
-          const margin = notionalValue / leverage;
-          
-          // 计算风险百分比（到强平的距离）
-          const riskPercent = currentPrice > 0 
-            ? Math.abs((currentPrice - liquidationPrice) / currentPrice) * 100 
-            : 0;
-          
-          return {
-            contract: p.contract,
-            notionalValue,
-            margin,
-            leverage,
-            pnl,
-            riskPercent,
-            side: Number.parseFloat(p.size || "0") > 0 ? "long" : "short",
-          };
-        })
-      );
-      
+
+      // 计算每个持仓的风险
+      const activePositions = positions.filter((p: any) => Number.parseInt(p.size || "0") !== 0);
+
+      const positionRisks = activePositions.map((p: any) => {
+        const size = Math.abs(Number.parseFloat(p.size || "0"));
+        const entryPrice = Number.parseFloat(p.entryPrice || "0");
+        const leverage = Number.parseInt(p.leverage || "1");
+        const liquidationPrice = Number.parseFloat(p.liqPrice || "0");
+        const currentPrice = Number.parseFloat(p.markPrice || "0");
+        const pnl = Number.parseFloat(p.unrealisedPnl || "0");
+
+        // 使用默认合约乘数 0.01
+        const quantoMultiplier = 0.01;
+
+        // 正确计算名义价值：张数 × 入场价格 × 合约乘数
+        const notionalValue = size * entryPrice * quantoMultiplier;
+        const margin = Number.parseFloat(p.margin || notionalValue / leverage);
+
+        // 计算风险百分比（到强平的距离）
+        const riskPercent = currentPrice > 0
+          ? Math.abs((currentPrice - liquidationPrice) / currentPrice) * 100
+          : 0;
+
+        return {
+          contract: p.contract,
+          notionalValue,
+          margin,
+          leverage,
+          pnl,
+          riskPercent,
+          side: Number.parseFloat(p.size || "0") > 0 ? "long" : "short",
+        };
+      });
+
       const totalNotional = positionRisks.reduce((sum: number, p: any) => sum + p.notionalValue, 0);
       const totalMargin = positionRisks.reduce((sum: number, p: any) => sum + p.margin, 0);
       const usedMarginPercent = totalBalance > 0 ? (totalMargin / totalBalance) * 100 : 0;
-      
-      // 从数据库获取初始资金
-      const initialBalanceResult = await dbClient.execute(
-        "SELECT total_value FROM account_history ORDER BY timestamp ASC LIMIT 1"
-      );
-      const initialBalance = initialBalanceResult.rows[0]
-        ? Number.parseFloat(initialBalanceResult.rows[0].total_value as string)
-        : 100;
-      
-      const returnPercent = initialBalance > 0 
-        ? ((totalBalance - initialBalance) / initialBalance) * 100 
+
+      // TODO: 从 backend-base 获取初始资金，暂时使用默认值
+      const initialBalance = 10000;
+      const returnPercent = initialBalance > 0
+        ? ((totalBalance - initialBalance) / initialBalance) * 100
         : 0;
-      
+
       let riskLevel = "low";
       if (usedMarginPercent > 80) {
         riskLevel = "high";
@@ -290,65 +281,30 @@ export const createCalculateRiskTool = (gateClient: GateClient) => createTool({
 
 /**
  * 同步持仓到数据库工具
+ * 注意：由于现在持仓数据直接从 backend-base 获取，这个工具已废弃
+ * 保留接口以兼容性，但实际不再执行同步操作
  */
-export const createSyncPositionsTool = (gateClient: GateClient, engineId: number = 1) => createTool({
+export const createSyncPositionsTool = (backendClient: GateApiLocal) => createTool({
   name: "syncPositions",
-  description: "同步交易所持仓数据到本地数据库",
+  description: "同步交易所持仓数据到本地数据库（已废弃，持仓数据现在直接从 backend-base 获取）",
   parameters: z.object({}),
   execute: async () => {
     try {
-      const positions = await gateClient.getPositions();
-      
-      // 清空本地持仓表 (TODO: 应该只清空当前 engine 的持仓)
-      // await dbClient.execute("DELETE FROM positions WHERE engine_id = ?", [engineId]);
-      // 暂时保持原样，但加上 engineId
-      await dbClient.execute({
-        sql: "DELETE FROM positions WHERE engine_id = ?",
-        args: [engineId]
-      });
-      
-      // 插入当前持仓
-      for (const p of positions) {
-        const pos = p as any;
-        const size = Number.parseFloat(pos.size || "0");
-        if (size === 0) continue;
-        
-        const symbol = pos.contract?.replace("_USDT", "") || "";
-        const side = size > 0 ? "long" : "short";
-        
-        await dbClient.execute({
-          sql: `INSERT INTO positions 
-                (engine_id, symbol, quantity, entry_price, current_price, liquidation_price, unrealized_pnl, 
-                 leverage, side, entry_order_id, opened_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          args: [
-            engineId,
-            symbol,
-            Math.abs(size),
-            Number.parseFloat(pos.entryPrice || "0"),
-            Number.parseFloat(pos.markPrice || "0"),
-            Number.parseFloat(pos.liqPrice || "0"),
-            Number.parseFloat(pos.unrealisedPnl || "0"),
-            Number.parseInt(pos.leverage || "1"),
-            side,
-            "synced",
-            new Date().toISOString(),
-          ],
-        });
-      }
-      
+      // 现在持仓数据直接从 backend-base 获取，无需同步
+      // 只是为了验证连接是否正常
+      await backendClient.futures.listPositions('usdt');
+
       return {
         success: true,
-        syncedCount: positions.filter((p: any) => Number.parseFloat(p.size || "0") !== 0).length,
-        message: "持仓同步完成",
+        syncedCount: 0,
+        message: "持仓数据现在直接从 backend-base 获取，无需同步",
       };
     } catch (error: any) {
       return {
         success: false,
         error: error.message,
-        message: `同步持仓失败: ${error.message}`,
+        message: `连接 backend-base 失败: ${error.message}`,
       };
     }
   },
 });
-

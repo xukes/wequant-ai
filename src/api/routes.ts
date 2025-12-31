@@ -118,9 +118,10 @@ export function createApiRoutes() {
       } catch (e) {
         // Ignore error if engine is not running or not found in manager
       }
-      
+
       // Delete related data first (Manual Cascade Delete)
-      const tables = ['trades', 'positions', 'account_history', 'trading_signals', 'agent_decisions'];
+      // 注意：positions 和 trades 表已废弃，现在数据存储在 backend-base
+      const tables = ['account_history', 'trading_signals', 'agent_decisions'];
       for (const table of tables) {
         await dbClient.execute({
           sql: `DELETE FROM ${table} WHERE engine_id = ?`,
@@ -133,7 +134,7 @@ export function createApiRoutes() {
         sql: "DELETE FROM quant_engines WHERE id = ?",
         args: [id]
       });
-      
+
       return c.json({ success: true, message: `Engine ${id} deleted` });
     } catch (error: any) {
       return c.json({ error: error.message }, 500);
@@ -159,16 +160,14 @@ export function createApiRoutes() {
         sql: "SELECT * FROM account_history WHERE engine_id = ? ORDER BY timestamp DESC LIMIT 1",
         args: [id]
       });
-      
-      // Get positions count and sum unrealized pnl
-      const positionsResult = await dbClient.execute({
-        sql: "SELECT COUNT(*) as count, SUM(unrealized_pnl) as total_pnl FROM positions WHERE engine_id = ?",
-        args: [id]
-      });
+
+      // 注意：positions 数据现在从 backend-base 获取
+      // 暂时返回零值，因为 backend-base 的 positions 不是按 engine_id 分离的
+      const positionsSummary = { count: 0, total_pnl: 0 };
 
       return c.json({
         latestHistory: historyResult.rows[0] || null,
-        positionsSummary: positionsResult.rows[0] || { count: 0, total_pnl: 0 }
+        positionsSummary
       });
     } catch (error: any) {
       return c.json({ error: error.message }, 500);
@@ -193,25 +192,24 @@ export function createApiRoutes() {
   app.get("/api/engines/:id/positions", async (c) => {
     const id = Number.parseInt(c.req.param("id"));
     try {
-      const result = await dbClient.execute({
-        sql: "SELECT * FROM positions WHERE engine_id = ? ORDER BY opened_at DESC",
-        args: [id]
-      });
-      return c.json({ data: result.rows });
+      // 注意：positions 数据现在从 backend-base 获取
+      // 暂时返回空数组，因为 backend-base 的 positions 不是按 engine_id 分离的
+      return c.json({ data: [], message: "Positions data now stored in backend-base" });
     } catch (error: any) {
       return c.json({ error: error.message }, 500);
     }
   });
 
   // 8. Get Engine Trades
+  // 注意：trades 数据现在从 backend-base 的 user_position_finish 表获取
   app.get("/api/engines/:id/trades", async (c) => {
     const id = Number.parseInt(c.req.param("id"));
     try {
-      const result = await dbClient.execute({
-        sql: "SELECT * FROM trades WHERE engine_id = ? ORDER BY timestamp DESC LIMIT 100",
-        args: [id]
+      // 返回提示信息
+      return c.json({
+        data: [],
+        message: "Trades data now stored in backend-base user_position_finish table"
       });
-      return c.json({ data: result.rows });
     } catch (error: any) {
       return c.json({ error: error.message }, 500);
     }
