@@ -46,7 +46,8 @@ async function initDatabase() {
     // 简单的迁移逻辑：尝试为旧表添加 engine_id 字段
     // 如果是全新安装，CREATE_TABLES_SQL 已经创建了带 engine_id 的表
     // 如果是旧数据库，CREATE_TABLES_SQL 会跳过已存在的表，这里补上字段
-    const tablesToMigrate = ['trades', 'positions', 'account_history', 'trading_signals', 'agent_decisions'];
+    // 注意：trades 和 positions 表已废弃，不再迁移
+    const tablesToMigrate = ['account_history', 'trading_signals', 'agent_decisions'];
     
     for (const table of tablesToMigrate) {
       try {

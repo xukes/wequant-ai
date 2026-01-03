@@ -41,6 +41,13 @@ const logger = createPinoLogger({
   level: "info",
 });
 
+// Local DB client removed as quant_engines table is gone.
+// const dbClient = createClient({
+//   url: process.env.DATABASE_URL || "file:./.voltagent/trading.db",
+// });
+
+// We still need dbClient for recording decisions and history if those tables are local.
+// Based on schema.ts, account_history and agent_decisions are still local.
 const dbClient = createClient({
   url: process.env.DATABASE_URL || "file:./.voltagent/trading.db",
 });
@@ -684,10 +691,12 @@ export class AgentRunner {
       await this.recordDecision(decisionText, marketData, accountInfo.totalBalance, positions.length);
 
       // 11. Update Last Run
-      await dbClient.execute({
-        sql: "UPDATE quant_engines SET last_run_at = ? WHERE id = ?",
-        args: [new Date().toISOString(), engineId],
-      });
+      // Local DB update removed as quant_engines table is gone.
+      // Ideally, we should report heartbeat/status to backend-base.
+      // await dbClient.execute({
+      //   sql: "UPDATE quant_engines SET last_run_at = ? WHERE id = ?",
+      //   args: [new Date().toISOString(), engineId],
+      // });
 
     } catch (error: any) {
       logger.error(`Engine ${engineId} cycle failed:`, error);
@@ -696,10 +705,12 @@ export class AgentRunner {
 
   private async updateStatus(status: string) {
     try {
-      await dbClient.execute({
-        sql: "UPDATE quant_engines SET status = ? WHERE id = ?",
-        args: [status, this.config.id],
-      });
+      // Local DB update removed.
+      // TODO: Call backend API to update status if needed.
+      // await dbClient.execute({
+      //   sql: "UPDATE quant_engines SET status = ? WHERE id = ?",
+      //   args: [status, this.config.id],
+      // });
     } catch (error: any) {
       logger.error(`Failed to update status for engine ${this.config.id}`, error);
     }

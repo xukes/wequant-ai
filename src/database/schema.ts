@@ -20,20 +20,8 @@
  * 数据库模式定义
  */
 
-export interface QuantEngine {
-  id: number;
-  name: string;
-  description?: string;
-  api_key: string;
-  api_secret: string;
-  model_name: string;
-  strategy: string;
-  risk_params: string; // JSON string
-  status: 'running' | 'stopped' | 'error';
-  last_run_at?: string;
-  created_at: string;
-  updated_at: string;
-}
+// QuantEngine table is removed from local DB.
+// export interface QuantEngine { ... }
 
 // 注意：Trade 接口已废弃
 // 交易记录现在存储在 backend-base 的 user_position_finish 表中
@@ -95,31 +83,26 @@ export interface SystemConfig {
  * 注意：
  * - positions 表已废弃，数据现在存储在 backend-base 的 user_position 表中
  * - trades 表已废弃，交易记录现在存储在 backend-base 的 user_position_finish 表中
+ * - quant_engines 表已废弃，数据现在存储在 backend-base 的 quant_engines 表中
  */
 export const CREATE_TABLES_SQL = `
--- 量化引擎配置表 (新增)
-CREATE TABLE IF NOT EXISTS quant_engines (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL,
-  description TEXT,
-  api_key TEXT NOT NULL,
-  api_secret TEXT NOT NULL,
-  model_name TEXT DEFAULT 'deepseek/deepseek-v3.2-exp',
-  strategy TEXT DEFAULT 'balanced',
-  risk_params TEXT, -- JSON 格式存储个性化风控参数
-  status TEXT DEFAULT 'stopped',
-  last_run_at TEXT,
-  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-);
+-- 量化引擎配置表 (已废弃，不再创建)
+-- CREATE TABLE IF NOT EXISTS quant_engines (
+--   id INTEGER PRIMARY KEY AUTOINCREMENT,
+--   name TEXT NOT NULL,
+--   description TEXT,
+--   api_key TEXT NOT NULL,
+--   api_secret TEXT NOT NULL,
+--   model_name TEXT DEFAULT 'deepseek/deepseek-v3.2-exp',
+--   strategy TEXT DEFAULT 'balanced',
+--   risk_params TEXT, -- JSON 格式存储个性化风控参数
+--   status TEXT DEFAULT 'stopped',
+--   last_run_at TEXT,
+--   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+--   updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+-- );
 
--- 注意：trades 表已废弃
--- 交易记录现在存储在 backend-base 的 user_position_finish 表中
-
--- 注意：positions 表已废弃
--- 持仓数据现在从 backend-base 的 user_position 表获取
-
--- 账户历史表
+-- 账户历史记录表 (增加 engine_id)
 CREATE TABLE IF NOT EXISTS account_history (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   engine_id INTEGER NOT NULL, -- 关联 quant_engines
@@ -129,8 +112,8 @@ CREATE TABLE IF NOT EXISTS account_history (
   unrealized_pnl REAL NOT NULL,
   realized_pnl REAL NOT NULL,
   return_percent REAL NOT NULL,
-  sharpe_ratio REAL,
-  FOREIGN KEY (engine_id) REFERENCES quant_engines(id) ON DELETE CASCADE
+  sharpe_ratio REAL
+  -- FOREIGN KEY (engine_id) REFERENCES quant_engines(id) ON DELETE CASCADE -- Removed FK constraint as table is gone
 );
 
 -- 技术指标表
@@ -149,8 +132,8 @@ CREATE TABLE IF NOT EXISTS trading_signals (
   open_interest REAL,
   funding_rate REAL,
   atr_3 REAL,
-  atr_14 REAL,
-  FOREIGN KEY (engine_id) REFERENCES quant_engines(id) ON DELETE CASCADE
+  atr_14 REAL
+  -- FOREIGN KEY (engine_id) REFERENCES quant_engines(id) ON DELETE CASCADE -- Removed FK constraint
 );
 
 -- Agent 决策记录表
@@ -163,8 +146,8 @@ CREATE TABLE IF NOT EXISTS agent_decisions (
   decision TEXT NOT NULL,
   actions_taken TEXT NOT NULL,
   account_value REAL NOT NULL,
-  positions_count INTEGER NOT NULL,
-  FOREIGN KEY (engine_id) REFERENCES quant_engines(id) ON DELETE CASCADE
+  positions_count INTEGER NOT NULL
+  -- FOREIGN KEY (engine_id) REFERENCES quant_engines(id) ON DELETE CASCADE -- Removed FK constraint
 );
 
 -- 系统配置表 (保留用于全局配置)

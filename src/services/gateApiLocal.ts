@@ -207,5 +207,12 @@ export class GateApiLocal {
 
     listFuturesSettlementHistory: (settle: string, opts: any = {}) => 
       this.request('GET', `/futures/${settle}/settlements`, opts), // Assuming this endpoint
+
+    // Backend API methods for Engine Management
+    getQuantRunningEngines: () => 
+      this.request('GET', `/quant/engines/running`),
+
+    getQuantEngineConfig: (id: number) => 
+      this.request('GET', `/quant/engines/${id}`),
   };
 }

@@ -17,17 +17,19 @@
  */
 
 import { AgentRunner, EngineConfig } from "./AgentRunner";
-import { createClient } from "@libsql/client";
 import { createPinoLogger } from "@voltagent/logger";
+import { GateApiLocal } from "../services/gateApiLocal";
 
 const logger = createPinoLogger({
   name: "engine-manager",
   level: "info",
 });
 
-const dbClient = createClient({
-  url: process.env.DATABASE_URL || "file:./.voltagent/trading.db",
-});
+// Use a default GateApiLocal instance for fetching engine configs.
+// The keys here are placeholders as we only need to access the public/internal backend APIs initially.
+// Ideally, the backend API for engine management shouldn't require Gate API keys, or we should use a system key.
+// For now, we assume the backend API is accessible.
+const backendApi = new GateApiLocal("system", "system", process.env.BACKEND_API_URL || "http://localhost:8998/api/v4");
 
 export class EngineManager {
   private static instance: EngineManager;
@@ -43,15 +45,16 @@ export class EngineManager {
   }
 
   /**
-   * 初始化：从数据库加载所有状态为 running 的引擎并启动
+   * 初始化：从后端 API 加载所有状态为 running 的引擎并启动
    */
   public async init() {
     logger.info("Initializing Engine Manager...");
     try {
-      const result = await dbClient.execute("SELECT * FROM quant_engines WHERE status = 'running'");
+      const { body } = await backendApi.futures.getQuantRunningEngines();
+      const runningEngines = body.data || [];
       
-      for (const row of result.rows) {
-        await this.startEngine(row.id as number);
+      for (const engine of runningEngines) {
+        await this.startEngine(engine.id);
       }
       
       logger.info(`Restored ${this.runners.size} running engines.`);
@@ -71,24 +74,21 @@ export class EngineManager {
 
     try {
       // 1. 获取配置
-      const result = await dbClient.execute({
-        sql: "SELECT * FROM quant_engines WHERE id = ?",
-        args: [engineId],
-      });
+      const { body } = await backendApi.futures.getQuantEngineConfig(engineId);
+      const engineData = body.data;
 
-      if (result.rows.length === 0) {
+      if (!engineData) {
         throw new Error(`Engine ${engineId} not found`);
       }
 
-      const row = result.rows[0];
       const config: EngineConfig = {
-        id: row.id as number,
-        name: row.name as string,
-        apiKey: row.api_key as string,
-        apiSecret: row.api_secret as string,
-        modelName: row.model_name as string,
-        strategy: row.strategy as string,
-        riskParams: JSON.parse((row.risk_params as string) || "{}"),
+        id: engineData.id,
+        name: engineData.name,
+        apiKey: engineData.apiKey,
+        apiSecret: engineData.apiSecret,
+        modelName: engineData.modelName,
+        strategy: engineData.strategy,
+        riskParams: engineData.riskParams || {},
       };
 
       // 2. 创建并启动 Runner

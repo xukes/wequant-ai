@@ -24,6 +24,7 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import { createClient } from "@libsql/client";
 import { createPinoLogger } from "@voltagent/logger";
 import { EngineManager } from "../scheduler/EngineManager";
+import { GateApiLocal } from "../services/gateApiLocal";
 
 const logger = createPinoLogger({
   name: "api-routes",
@@ -34,6 +35,9 @@ const dbClient = createClient({
   url: process.env.DATABASE_URL || "file:./.voltagent/trading.db",
 });
 
+// Use a default GateApiLocal instance for fetching engine configs.
+const backendApi = new GateApiLocal("system", "system", process.env.BACKEND_API_URL || "http://localhost:8998/api/v4");
+
 export function createApiRoutes() {
   const app = new Hono();
   
@@ -43,7 +47,7 @@ export function createApiRoutes() {
     c.res.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     c.res.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     if (c.req.method === 'OPTIONS') {
-      return c.text('', 204);
+      return c.newResponse(null, 204);
     }
     await next();
   });
@@ -56,34 +60,10 @@ export function createApiRoutes() {
   // ====== Engine Management APIs ======
 
   // 1. Create a new Quant Engine
+  // This should now be handled by the backend-base API directly, or we proxy it.
+  // For now, we will disable creation from this service as it doesn't own the DB table anymore.
   app.post("/api/engines", async (c) => {
-    try {
-      const body = await c.req.json();
-      const { name, apiKey, apiSecret, modelName, strategy, riskParams } = body;
-
-      if (!name || !apiKey || !apiSecret) {
-        return c.json({ error: "Missing required fields" }, 400);
-      }
-
-      const result = await dbClient.execute({
-        sql: `INSERT INTO quant_engines (name, api_key, api_secret, model_name, strategy, risk_params, status)
-              VALUES (?, ?, ?, ?, ?, ?, 'stopped') RETURNING id`,
-        args: [
-          name,
-          apiKey,
-          apiSecret,
-          modelName || "deepseek/deepseek-v3.2-exp",
-          strategy || "balanced",
-          JSON.stringify(riskParams || {}),
-        ],
-      });
-
-      const newId = result.rows[0].id;
-      return c.json({ success: true, id: newId, message: "Engine created" });
-    } catch (error: any) {
-      logger.error("Create engine failed:", error);
-      return c.json({ error: error.message }, 500);
-    }
+    return c.json({ error: "Engine creation is now managed by the backend service." }, 400);
   });
 
   // 2. Start an Engine
@@ -129,23 +109,22 @@ export function createApiRoutes() {
         });
       }
 
-      // Delete from DB
-      await dbClient.execute({
-        sql: "DELETE FROM quant_engines WHERE id = ?",
-        args: [id]
-      });
-
-      return c.json({ success: true, message: `Engine ${id} deleted` });
+      // Deletion of the engine itself should be handled by backend-base
+      return c.json({ success: true, message: `Engine ${id} stopped and local data cleaned. Please delete engine config from backend.` });
     } catch (error: any) {
       return c.json({ error: error.message }, 500);
     }
   });
 
   // 4. List all Engines
+  // This should fetch from backend-base
   app.get("/api/engines", async (c) => {
     try {
-      const result = await dbClient.execute("SELECT * FROM quant_engines ORDER BY created_at DESC");
-      return c.json({ engines: result.rows });
+      // We don't have a list all engines endpoint in backend-base yet for this service to consume easily without auth context?
+      // Actually we added getRunningEngines, but not list all.
+      // Assuming the frontend will call backend-base directly for the list of engines.
+      // Or we can proxy if needed. For now, let's return an empty list or error to indicate deprecation.
+      return c.json({ engines: [], message: "Please fetch engine list from backend service." });
     } catch (error: any) {
       return c.json({ error: error.message }, 500);
     }
