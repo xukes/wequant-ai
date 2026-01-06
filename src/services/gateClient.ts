@@ -31,15 +31,15 @@ const logger = createPinoLogger({
 });
 
 export class GateClient {
-  private readonly client: GateApiLocal;
+  public readonly client: GateApiLocal;
   private readonly futuresApi: any;
 
   // private readonly spotApi: any;
   private readonly settle = "usdt"; // Use USDT settlement
 
-  constructor(apiKey: string, apiSecret: string) {
+  constructor(apiKey: string, apiSecret: string, baseUrl: string = "http://127.0.0.1:8998/api/v4") {
     // @ts-ignore
-    this.client = new GateApiLocal(apiKey, apiSecret, "http://127.0.0.1:8998/api/v4");
+    this.client = new GateApiLocal(apiKey, apiSecret, baseUrl);
     // @ts-ignore
     this.futuresApi = this.client.futures;
   }

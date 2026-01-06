@@ -80,27 +80,8 @@ export interface SystemConfig {
 
 /**
  * SQL 建表语句
- * 注意：
- * - positions 表已废弃，数据现在存储在 backend-base 的 user_position 表中
- * - trades 表已废弃，交易记录现在存储在 backend-base 的 user_position_finish 表中
- * - quant_engines 表已废弃，数据现在存储在 backend-base 的 quant_engines 表中
  */
 export const CREATE_TABLES_SQL = `
--- 量化引擎配置表 (已废弃，不再创建)
--- CREATE TABLE IF NOT EXISTS quant_engines (
---   id INTEGER PRIMARY KEY AUTOINCREMENT,
---   name TEXT NOT NULL,
---   description TEXT,
---   api_key TEXT NOT NULL,
---   api_secret TEXT NOT NULL,
---   model_name TEXT DEFAULT 'deepseek/deepseek-v3.2-exp',
---   strategy TEXT DEFAULT 'balanced',
---   risk_params TEXT, -- JSON 格式存储个性化风控参数
---   status TEXT DEFAULT 'stopped',
---   last_run_at TEXT,
---   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
---   updated_at TEXT DEFAULT CURRENT_TIMESTAMP
--- );
 
 -- 账户历史记录表 (增加 engine_id)
 CREATE TABLE IF NOT EXISTS account_history (
@@ -150,13 +131,6 @@ CREATE TABLE IF NOT EXISTS agent_decisions (
   -- FOREIGN KEY (engine_id) REFERENCES quant_engines(id) ON DELETE CASCADE -- Removed FK constraint
 );
 
--- 系统配置表 (保留用于全局配置)
-CREATE TABLE IF NOT EXISTS system_config (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  key TEXT NOT NULL UNIQUE,
-  value TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
 
 -- 创建索引
 CREATE INDEX IF NOT EXISTS idx_signals_timestamp ON trading_signals(timestamp);

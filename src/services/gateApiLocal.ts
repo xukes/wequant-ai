@@ -13,7 +13,7 @@ export class GateApiLocal {
   private apiSecret: string;
   private defaultHeaders: any = {};
 
-  constructor(apiKey: string, apiSecret: string, basePath: string = 'https://api.gateio.ws/api/v4') {
+  constructor(apiKey: string, apiSecret: string, basePath: string) {
     this.apiKey = apiKey.trim();
     this.apiSecret = apiSecret.trim();
     this.basePath = basePath;

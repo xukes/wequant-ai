@@ -57,14 +57,6 @@ source .env
 # 检查必需的环境变量
 MISSING_VARS=()
 
-if [ -z "$GATE_API_KEY" ]; then
-    MISSING_VARS+=("GATE_API_KEY")
-fi
-
-if [ -z "$GATE_API_SECRET" ]; then
-    MISSING_VARS+=("GATE_API_SECRET")
-fi
-
 if [ -z "$OPENROUTER_API_KEY" ]; then
     MISSING_VARS+=("OPENROUTER_API_KEY")
 fi
@@ -102,10 +94,6 @@ echo "=================================================="
 echo "  配置信息"
 echo "=================================================="
 echo -e "${BLUE}数据库 URL:${NC} $DATABASE_URL"
-echo -e "${BLUE}初始资金:${NC} $INITIAL_BALANCE USDT"
-echo -e "${BLUE}测试网模式:${NC} ${GATE_USE_TESTNET:-false}"
-echo -e "${BLUE}交易间隔:${NC} ${TRADING_INTERVAL_MINUTES:-5} 分钟"
-echo -e "${BLUE}最大杠杆:${NC} ${MAX_LEVERAGE:-10}x"
 echo ""
 
 # 询问是否继续

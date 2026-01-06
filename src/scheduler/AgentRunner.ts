@@ -20,7 +20,6 @@ import cron from "node-cron";
 import { createPinoLogger } from "@voltagent/logger";
 import { createClient } from "@libsql/client";
 import { GateClient } from "../services/gateClient";
-import { GateApiLocal } from "../services/gateApiLocal";
 import { createTradingTools } from "../tools/trading/factory";
 import { Agent, Memory } from "@voltagent/core";
 import { LibSQLMemoryAdapter } from "@voltagent/libsql";
@@ -65,7 +64,6 @@ export interface EngineConfig {
 export class AgentRunner {
   private config: EngineConfig;
   private gateClient: GateClient;
-  private backendBaseClient: GateApiLocal;
   private agent: Agent;
   private cronTask: cron.ScheduledTask | null = null;
   private isRunning: boolean = false;
@@ -76,11 +74,11 @@ export class AgentRunner {
 
   constructor(config: EngineConfig) {
     this.config = config;
-    this.gateClient = new GateClient(config.apiKey, config.apiSecret);
-
-    // 创建 backend-base API 客户端（用于账户和持仓查询）
+    
+    // 获取配置的 URL
     const backendBaseUrl = process.env.BACKEND_BASE_URL || "http://127.0.0.1:8998/api/v4";
-    this.backendBaseClient = new GateApiLocal(config.apiKey, config.apiSecret, backendBaseUrl);
+    // 实例化 GateClient，传入 URL
+    this.gateClient = new GateClient(config.apiKey, config.apiSecret, backendBaseUrl);
 
     // Initialize symbols from config or default
     if (config.riskParams && config.riskParams.symbols && Array.isArray(config.riskParams.symbols) && config.riskParams.symbols.length > 0) {
@@ -104,8 +102,8 @@ export class AgentRunner {
       // 暂时移除 namespace，LibSQLMemoryAdapter 内部可能需要支持 session_id 来区分
     });
 
-    // 创建工具集（传入 gateClient 和 backendBaseClient）
-    const tools = createTradingTools(this.gateClient, this.backendBaseClient);
+    // 创建工具集（传入 gateClient 和 gateClient.client）
+    const tools = createTradingTools(this.gateClient, this.gateClient.client);
 
     // 使用详细的策略指令生成 System Prompt
     // 默认执行间隔为 1 分钟 (与 cron 调度一致)
@@ -283,28 +281,37 @@ export class AgentRunner {
    */
   private async getTradeHistory(limit: number = 10) {
     try {
-      const result = await dbClient.execute({
-        sql: `SELECT * FROM trades WHERE engine_id = ? ORDER BY timestamp DESC LIMIT ?`,
-        args: [this.config.id, limit],
+      // 迁移至使用后端 API 获取历史订单
+      // status='finished' 获取已完成的订单
+      const result = await this.gateClient.client.futures.listFuturesOrders("usdt", "finished", {
+        limit: limit,
+        offset: 0
       });
-      
-      if (!result.rows || result.rows.length === 0) return [];
-      
-      const trades = result.rows.map((row: any) => ({
-        symbol: row.symbol,
-        side: row.side,
-        type: row.type,
-        price: Number.parseFloat(row.price || "0"),
-        quantity: Number.parseFloat(row.quantity || "0"),
-        leverage: Number.parseInt(row.leverage || "1"),
-        pnl: row.pnl ? Number.parseFloat(row.pnl) : null,
-        fee: Number.parseFloat(row.fee || "0"),
-        timestamp: row.timestamp,
-        status: row.status,
-      }));
-      
-      // Sort oldest to newest
+
+      if (!result.body || !Array.isArray(result.body)) return [];
+
+      const trades = result.body.map((order: any) => {
+        const size = Number.parseFloat(order.size || "0");
+        // Gate API timestamp 是秒
+        const timestamp = order.create_time ? new Date(order.create_time * 1000).toISOString() : new Date().toISOString();
+        
+        return {
+          symbol: order.contract,
+          side: size > 0 ? "buy" : "sell", // 简单映射：size > 0 为买入(开多或平空)，< 0 为卖出
+          type: order.text || "order",     // 订单备注或类型
+          price: Number.parseFloat(order.fill_price || order.price || "0"),
+          quantity: Math.abs(size),
+          leverage: 1, // 历史订单接口通常不直接返回杠杆，这里给默认值
+          pnl: null,   // 订单列表接口通常不包含 PnL
+          fee: Number.parseFloat(order.fee || "0"),
+          timestamp: timestamp,
+          status: order.status,
+        };
+      });
+
+      // Sort oldest to newest (to match previous behavior for Context building)
       trades.sort((a: any, b: any) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+      
       return trades;
     } catch (error) {
       logger.error(`[Engine ${this.config.id}] Failed to get trade history:`, error as any);
@@ -520,33 +527,10 @@ export class AgentRunner {
             }
           }
           
-          // 3. Record to trades table
-          try {
-            await dbClient.execute({
-              sql: `INSERT INTO trades (engine_id, order_id, symbol, side, type, price, quantity, leverage, pnl, fee, timestamp, status)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-              args: [
-                this.config.id,
-                order.id?.toString() || "",
-                symbol,
-                side,
-                "close",
-                actualExitPrice || pos.current_price,
-                actualQuantity,
-                pos.leverage || 1,
-                pnl,
-                totalFee,
-                getChinaTimeISO(),
-                orderFilled ? "filled" : "pending",
-              ],
-            });
-            logger.info(`[Engine ${this.config.id}] ✅ Forced close trade recorded: ${symbol}, PnL=${pnl.toFixed(2)} USDT, Reason=${closeReason}`);
-          } catch (dbError: any) {
-            logger.error(`[Engine ${this.config.id}] ❌ Failed to record forced close trade: ${dbError.message}`);
-          }
+          // 3. Record to trades table (REMOVED: backend now handles storage)
+          logger.info(`[Engine ${this.config.id}] ✅ Forced close completed ${symbol}, PnL=${pnl.toFixed(2)} USDT, Reason=${closeReason}`);
 
           // 注意：不再需要从数据库删除 position，因为数据现在存储在 backend-base
-          logger.info(`[Engine ${this.config.id}] ✅ Forced close completed ${symbol}, Reason: ${closeReason}`);
           positionsChanged = true;
           
         } catch (closeError: any) {
