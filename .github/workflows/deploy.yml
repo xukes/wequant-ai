@@ -1,4 +1,4 @@
-name: Deploy Trading System to Remote Server
+name: Deploy Trading System (PM2)
 
 on:
   push:
@@ -21,7 +21,7 @@ jobs:
           node-version: '22'
           cache: 'npm'
 
-      - name: Install dependencies
+      - name: Install dependencies (Local)
         run: npm ci
 
       - name: Build project
@@ -30,158 +30,75 @@ jobs:
       - name: Install sshpass and rsync
         run: sudo apt-get update && sudo apt-get install -y sshpass rsync
 
-      - name: Deploy to remote server
+      - name: Deploy to Server
         env:
           SSH_HOST: ${{ secrets.ALIYUN_SSH_HOST }}
           SSH_USERNAME: ${{ secrets.ALIYUN_USER_USER }}
-          SSH_PASSWORD: ${{ secrets. ALIYUN_SSH_PASSWORD }}
+          SSH_PASSWORD: ${{ secrets.ALIYUN_SSH_PASSWORD }}
           SSH_PORT: ${{ secrets.ALIYUN_SSH_PORT || '22' }}
           DEPLOY_PATH: ${{ secrets.ALIYUN_DEPLOY_PATH || '/opt/nof1-trading' }}
+          # Environment Variables from Secrets
+          PORT: ${{ secrets.PORT || 3100 }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL || 'file:./.voltagent/trading.db' }}
+          TRADING_STRATEGY: ${{ secrets.TRADING_STRATEGY || 'balanced' }}
+          GATE_USE_TESTNET: ${{ secrets.GATE_USE_TESTNET || 'true' }}
         run: |
-          # 同步代码到服务器
+          # 1. 同步文件 (排除不需要的文件)
           sshpass -p "$SSH_PASSWORD" rsync -avz --delete \
             -e "ssh -p $SSH_PORT -o StrictHostKeyChecking=no" \
             --exclude='.git' \
             --exclude='node_modules' \
-            --exclude='.env' \
             --exclude='logs/' \
-            --exclude='*.log' \
+            --exclude='.env' \
+            --exclude='.voltagent' \
             ./ $SSH_USERNAME@$SSH_HOST:$DEPLOY_PATH/
 
-      - name: Install dependencies and restart service on server
-        env:
-          SSH_HOST: ${{ secrets.ALIYUN_SSH_HOST }}
-          SSH_USERNAME: ${{ secrets.ALIYUN_USER_USER }}
-          SSH_PASSWORD: ${{ secrets.ALIYUN_SSH_PASSWORD }}
-          SSH_PORT: ${{ secrets.ALIYUN_SSH_PORT || '22' }}
-          DEPLOY_PATH: ${{ secrets.ALIYUN_DEPLOY_PATH || '/opt/nof1-trading' }}
-        run: |
+          # 2. 远程执行部署命令
           sshpass -p "$SSH_PASSWORD" ssh -p $SSH_PORT -o StrictHostKeyChecking=no $SSH_USERNAME@$SSH_HOST << EOF
             cd $DEPLOY_PATH
-            
-            # 停止现有服务进程（彻底清理所有相关进程）
-            echo "Stopping all related processes..."
-            
-            # 1. 停止PM2进程（如果存在）
-            if command -v pm2 &> /dev/null; then
-              pm2 stop all 2>/dev/null || true
-              pm2 delete all 2>/dev/null || true
-            fi
-            
-            # 2. 终止所有占用3100端口的进程
-            if lsof -ti:3100; then
-              echo "Killing processes on port 3100..."
-              kill -9 \$(lsof -ti:3100) 2>/dev/null || true
-            fi
-            
-            # 3. 终止所有相关node进程
-            pkill -f "node.*index.js" 2>/dev/null || true
-            pkill -f "tsx.*src" 2>/dev/null || true
-            pkill -f "npm.*trading" 2>/dev/null || true
-            
-            # 4. 删除旧的PID文件
-            rm -f trading.pid 2>/dev/null || true
-            
-            # 等待进程完全退出
-            sleep 3
-            
-            # 5. 再次检查并强制清理
-            if lsof -ti:3100; then
-              echo "Force killing remaining processes on port 3100..."
-              kill -9 \$(lsof -ti:3100) 2>/dev/null || true
-              sleep 2
-            fi
-            
-            # 安装依赖
-            npm ci
-            
-            # 全局安装tsx（如果未安装）
-            if ! command -v tsx &> /dev/null; then
-              echo "Installing tsx globally..."
-              npm install -g tsx
-            fi
-            
-            # 确保.env文件存在并设置端口
-            if [ ! -f .env ]; then
-              echo "PORT=3100" > .env
-              echo "Warning: Created default .env file with PORT=3100. Please add other required environment variables."
-            else
-              # 更新或添加端口配置
-              if grep -q "^PORT=" .env; then
-                sed -i 's/^PORT=.*/PORT=3100/' .env
-              else
-                echo "PORT=3100" >> .env
-              fi
-            fi
-            
-            # 启动服务（后台运行）
-            echo "Starting trading system..."
-            nohup npm run trading:start > trading.log 2>&1 &
-            
-            # 记录启动的进程ID
-            trading_pid=\$!
-            echo \$trading_pid > trading.pid
-            echo "Trading system started with PID: \$trading_pid"
-            
-            # 等待服务启动
-            sleep 5
-            
-            # 验证进程启动
-            if ps -p \$trading_pid > /dev/null 2>&1; then
-              echo "✅ Process \$trading_pid is running"
-            else
-              echo "❌ Process \$trading_pid failed to start"
-              echo "Last 10 lines of log:"
-              tail -10 trading.log 2>/dev/null || echo "No log file found"
-            fi
-          EOF
 
-      - name: Health check
-        env:
-          SSH_HOST: ${{ secrets.ALIYUN_SSH_HOST }}
-          SSH_USERNAME: ${{ secrets.ALIYUN_USER_USER }}
-          SSH_PASSWORD: ${{ secrets.ALIYUN_SSH_PASSWORD }}
-          SSH_PORT: ${{ secrets.ALIYUN_SSH_PORT || '22' }}
-          DEPLOY_PATH: ${{ secrets.ALIYUN_DEPLOY_PATH || '/opt/nof1-trading' }}
-        run: |
-          # 等待服务启动
-          sleep 30
-          
-          # 检查服务健康状态
-          sshpass -p "$SSH_PASSWORD" ssh -p $SSH_PORT -o StrictHostKeyChecking=no $SSH_USERNAME@$SSH_HOST << EOF
-            cd $DEPLOY_PATH
-            
-            # 检查PID文件是否存在
-            if [ ! -f trading.pid ]; then
-              echo "❌ Trading system PID file not found"
-              echo "Current directory: \$(pwd)"
-              echo "Files in directory:"
-              ls -la | grep -E "(trading|\.pid|\.log)" || echo "No trading related files found"
-              exit 1
+            # 创建/更新 .env 文件
+            echo "Generating .env file..."
+            cat > .env << ENV_EOF
+            PORT=$PORT
+            NODE_ENV=production
+            OPENROUTER_API_KEY=$OPENROUTER_API_KEY
+            DATABASE_URL=$DATABASE_URL
+            TRADING_STRATEGY=$TRADING_STRATEGY
+            GATE_USE_TESTNET=$GATE_USE_TESTNET
+            # 其他默认配置
+            TRADING_INTERVAL_MINUTES=10
+            MAX_LEVERAGE=25
+            INITIAL_BALANCE=1000
+            ENV_EOF
+
+            # 安装生产环境依赖
+            npm ci --omit=dev
+
+            # 确保 logs 目录存在
+            mkdir -p logs
+
+            # 全局安装 PM2 (如果未安装)
+            if ! command -v pm2 &> /dev/null; then
+                echo "Installing PM2 globally..."
+                npm install -g pm2
             fi
-            
-            # 读取PID并检查进程是否存在
-            pid=\$(cat trading.pid)
-            if ! ps -p "\$pid" > /dev/null 2>&1; then
-              echo "❌ Trading system process (PID: \$pid) is not running"
-              echo "Last 20 lines of log:"
-              tail -20 trading.log 2>/dev/null || echo "No log file found"
-              exit 1
+
+            # 启动或重启应用
+            if pm2 list | grep -q "open-nof1.ai"; then
+                echo "Reloading application..."
+                npm run pm2:restart
+            else
+                echo "Starting application..."
+                npm run pm2:start
             fi
+
+            # 保存当前进程列表，以便服务器重启后自动恢复
+            pm2 save
             
-            echo "✅ Trading system process running (PID: \$pid)"
-            
-            # 检查端口3100监听
-            if ! netstat -tuln | grep -q ":3100"; then
-              echo "❌ Application port 3100 is not listening"
-              echo "Process may still be starting up. Recent logs:"
-              tail -10 trading.log 2>/dev/null || echo "No log file found"
-              exit 1
-            fi
-            
-            echo "✅ Trading system deployed and running successfully on port 3100"
-            echo "🌐 Monitor dashboard: http://localhost:3100/"
-            echo "📊 Recent logs:"
-            tail -5 trading.log 2>/dev/null || echo "No recent logs"
+            # 显示状态
+            echo "Deployment successful!"
+            pm2 status open-nof1.ai
           EOF
 
