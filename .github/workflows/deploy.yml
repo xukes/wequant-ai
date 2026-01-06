@@ -1,10 +1,9 @@
-name: Deploy Trading System (PM2)
+name: Deploy Trading System (Docker)
 
 on:
   push:
     branches:
       - main
-      - master
   workflow_dispatch:
 
 jobs:
@@ -14,18 +13,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-
-      - name: Install dependencies (Local)
-        run: npm ci
-
-      - name: Build project
-        run: npm run build
 
       - name: Install sshpass and rsync
         run: sudo apt-get update && sudo apt-get install -y sshpass rsync
@@ -39,6 +26,8 @@ jobs:
           DEPLOY_PATH: ${{ secrets.ALIYUN_DEPLOY_PATH || '/opt/nof1-trading' }}
           # Environment Variables from Secrets
           PORT: ${{ secrets.PORT || 3100 }}
+          GATE_API_KEY: ${{ secrets.GATE_API_KEY }}
+          GATE_API_SECRET: ${{ secrets.GATE_API_SECRET }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           DATABASE_URL: ${{ secrets.DATABASE_URL || 'file:./.voltagent/trading.db' }}
           TRADING_STRATEGY: ${{ secrets.TRADING_STRATEGY || 'balanced' }}
@@ -51,18 +40,22 @@ jobs:
             --exclude='node_modules' \
             --exclude='logs/' \
             --exclude='.env' \
+            --exclude='.env.production' \
             --exclude='.voltagent' \
+            --exclude='voltagent-data' \
             ./ $SSH_USERNAME@$SSH_HOST:$DEPLOY_PATH/
 
           # 2. 远程执行部署命令
           sshpass -p "$SSH_PASSWORD" ssh -p $SSH_PORT -o StrictHostKeyChecking=no $SSH_USERNAME@$SSH_HOST << EOF
             cd $DEPLOY_PATH
 
-            # 创建/更新 .env 文件
-            echo "Generating .env file..."
-            cat > .env << ENV_EOF
+            # 创建/更新 .env.production 文件 (供 Docker Compose 使用)
+            echo "Generating .env.production file..."
+            cat > .env.production << ENV_EOF
             PORT=$PORT
             NODE_ENV=production
+            GATE_API_KEY=$GATE_API_KEY
+            GATE_API_SECRET=$GATE_API_SECRET
             OPENROUTER_API_KEY=$OPENROUTER_API_KEY
             DATABASE_URL=$DATABASE_URL
             TRADING_STRATEGY=$TRADING_STRATEGY
@@ -72,33 +65,31 @@ jobs:
             MAX_LEVERAGE=25
             INITIAL_BALANCE=1000
             ENV_EOF
-
-            # 安装生产环境依赖
-            npm ci --omit=dev
-
-            # 确保 logs 目录存在
-            mkdir -p logs
-
-            # 全局安装 PM2 (如果未安装)
-            if ! command -v pm2 &> /dev/null; then
-                echo "Installing PM2 globally..."
-                npm install -g pm2
-            fi
-
-            # 启动或重启应用
-            if pm2 list | grep -q "open-nof1.ai"; then
-                echo "Reloading application..."
-                npm run pm2:restart
-            else
-                echo "Starting application..."
-                npm run pm2:start
-            fi
-
-            # 保存当前进程列表，以便服务器重启后自动恢复
-            pm2 save
             
+            # 为了兼容性，也可以复制一份为 .env（如果脚本里硬编码了读取 .env）
+            cp .env.production .env
+
+            # 确保数据目录存在
+            mkdir -p voltagent-data logs
+
+            # 检查 Docker 是否安装
+            if ! command -v docker &> /dev/null; then
+                echo "Error: Docker is not installed on the server."
+                exit 1
+            fi
+
+            echo "Starting Docker Compose deployment..."
+            
+            # 停止旧容器并启动新容器
+            # --build: 确保重新构建镜像
+            # -d: 后台运行
+            docker compose -f docker-compose.prod.yml up -d --build --remove-orphans
+
+            # 清理无用的镜像以释放空间
+            docker image prune -f
+
             # 显示状态
             echo "Deployment successful!"
-            pm2 status open-nof1.ai
+            docker compose -f docker-compose.prod.yml ps
           EOF
 
