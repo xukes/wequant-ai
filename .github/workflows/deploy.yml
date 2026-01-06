@@ -49,6 +49,19 @@ jobs:
           sshpass -p "$SSH_PASSWORD" ssh -p $SSH_PORT -o StrictHostKeyChecking=no $SSH_USERNAME@$SSH_HOST << EOF
             cd $DEPLOY_PATH
 
+            # 检测可用的 Docker Compose 命令
+            DOCKER_COMPOSE_CMD=""
+            if docker compose version &> /dev/null; then
+                DOCKER_COMPOSE_CMD="docker compose"
+            elif command -v docker-compose &> /dev/null; then
+                DOCKER_COMPOSE_CMD="docker-compose"
+            else
+                echo "❌ Error: Neither 'docker compose' nor 'docker-compose' found."
+                echo "Please install Docker Compose plugin or docker-compose standalone."
+                exit 1
+            fi
+            echo "✅ Using command: \$DOCKER_COMPOSE_CMD"
+
             # 创建/更新 .env.production 文件 (供 Docker Compose 使用)
             echo "Generating .env.production file..."
             cat > .env.production << ENV_EOF
@@ -72,24 +85,45 @@ jobs:
             # 确保数据目录存在
             mkdir -p voltagent-data logs
 
-            # 检查 Docker 是否安装
-            if ! command -v docker &> /dev/null; then
-                echo "Error: Docker is not installed on the server."
+            echo "🚀 Starting Docker Compose deployment..."
+            
+            # 1. 显式构建镜像，确保构建成功
+            echo "Building image..."
+            if ! \$DOCKER_COMPOSE_CMD -f docker-compose.prod.yml build; then
+                echo "❌ build failed"
                 exit 1
             fi
 
-            echo "Starting Docker Compose deployment..."
-            
-            # 停止旧容器并启动新容器
-            # --build: 确保重新构建镜像
-            # -d: 后台运行
-            docker compose -f docker-compose.prod.yml up -d --build --remove-orphans
+            # 2. 停止并移除旧容器（防止端口冲突或状态残留）
+            \$DOCKER_COMPOSE_CMD -f docker-compose.prod.yml down --remove-orphans
 
-            # 清理无用的镜像以释放空间
+            # 3. 启动新容器
+            echo "Starting containers..."
+            if ! \$DOCKER_COMPOSE_CMD -f docker-compose.prod.yml up -d; then
+                echo "❌ Start up failed"
+                exit 1
+            fi
+
+            # 清理无用的镜像
             docker image prune -f
 
-            # 显示状态
-            echo "Deployment successful!"
-            docker compose -f docker-compose.prod.yml ps
+            # 4. 验证部署状态
+            echo "Waiting for container to initialize..."
+            sleep 10
+            
+            # 检查容器状态
+            \$DOCKER_COMPOSE_CMD -f docker-compose.prod.yml ps
+            
+            # 检查是否有容器在运行
+            # 这里的逻辑是：如果 ps -q 为空（没容器），或者有退出状态的容器，则报错
+            RUNNING=\$(\$DOCKER_COMPOSE_CMD -f docker-compose.prod.yml ps --services --filter "status=running")
+            if [ -z "\$RUNNING" ]; then
+                echo "❌ Container seems to have exited or failed to start."
+                echo "Recent logs:"
+                \$DOCKER_COMPOSE_CMD -f docker-compose.prod.yml logs --tail=50
+                exit 1
+            else
+                echo "✅ Deployment successful! Container is running."
+            fi
           EOF
 
