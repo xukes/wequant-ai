@@ -77,7 +77,7 @@ export class EngineManager {
       if (!engineData) {
         throw new Error(`Engine ${engineId} not found`);
       }
-
+      logger.info(`Starting engine ${engineId} with config:`, engineData);
       const config: EngineConfig = {
         id: engineData.id,
         name: engineData.name,
@@ -96,7 +96,7 @@ export class EngineManager {
       logger.info(`Engine ${engineId} started successfully.`);
 
     } catch (error: any) {
-      logger.error(`Failed to start engine ${engineId}:`, error);
+      logger.error(error，`Failed to start engine ${engineId}:`);
       throw error;
     }
   }

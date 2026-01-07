@@ -84,6 +84,8 @@ export class AgentRunner {
       this.SYMBOLS = [...RISK_PARAMS.TRADING_SYMBOLS];
     }
 
+    logger.info(`Engine ${config.id} will trade symbols: ${this.SYMBOLS.join(", ")}`);
+
     // 初始化 Agent
     const openrouter = createOpenRouter({
       apiKey: process.env.OPENROUTER_API_KEY || "",
