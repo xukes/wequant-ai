@@ -26,7 +26,7 @@ const logger = createLogger("engine-manager", "info");
 // The keys here are placeholders as we only need to access the public/internal backend APIs initially.
 // Ideally, the backend API for engine management shouldn't require Gate API keys, or we should use a system key.
 // For now, we assume the backend API is accessible.
-const backendApi = new GateApiLocal("system", "system", process.env.BACKEND_API_URL || "http://localhost:8998/api/v4");
+const backendApi = new GateApiLocal("system", "system", process.env.BACKEND_API_URL || "http://127.0.0.1:8998/api/v4");
 
 export class EngineManager {
   private static instance: EngineManager;
