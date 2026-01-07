@@ -10,8 +10,8 @@ RUN apk add --no-cache bash sqlite
 # 复制 package.json 和 package-lock.json
 COPY package*.json ./
 
-# 安装依赖
-RUN npm ci --omit=dev
+# 安装依赖（包含 tsx 等开发依赖）
+RUN npm ci
 
 # 复制项目文件
 COPY . .
