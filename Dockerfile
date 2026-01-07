@@ -31,5 +31,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3100/api/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"
 
 # 启动应用（Linux 容器不需要 UTF-8 包装脚本）
-CMD ["tsx", "--env-file=.env", "./src"]
+CMD ["npm", "run", "trading:start"]
 
