@@ -1,11 +1,8 @@
 import crypto from 'node:crypto';
 import querystring from 'node:querystring';
-import { createPinoLogger } from "@voltagent/logger";
+import { createLogger } from "../utils/logger";
 
-const logger = createPinoLogger({
-  name: "gate-api-local",
-  level: "info",
-});
+const logger = createLogger("xxx", "info");
 
 export class GateApiLocal {
   private basePath: string;

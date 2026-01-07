@@ -22,13 +22,10 @@
 // @ts-ignore - gate-api type definitions might be incomplete
 // import * as GateApi from "gate-api";
 import { GateApiLocal } from "./gateApiLocal";
-import { createPinoLogger } from "@voltagent/logger";
+import { createLogger } from "../utils/logger";
 import { RISK_PARAMS } from "../config/riskParams";
 
-const logger = createPinoLogger({
-  name: "gate-client",
-  level: "info",
-});
+const logger = createLogger("gate-client", "info");
 
 export class GateClient {
   public readonly client: GateApiLocal;

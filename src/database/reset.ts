@@ -17,14 +17,11 @@
  */
 
 import { createClient } from "@libsql/client";
-import { createPinoLogger } from "@voltagent/logger";
+import { createLogger } from "../../utils/logger";
 import { CREATE_TABLES_SQL } from "./schema";
 import "dotenv/config";
 
-const logger = createPinoLogger({
-  name: "db-reset",
-  level: "info",
-});
+const logger = createLogger("xxx", "info");
 
 /**
  * 强制重新初始化数据库

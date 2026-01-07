@@ -20,13 +20,10 @@
  * 多时间框架分析模块（极简版 - 只提供原始数据）
  */
 
-import { createPinoLogger } from "@voltagent/logger";
+import { createLogger } from "../../utils/logger";
 import { createGateClient } from "./gateClient";
 
-const logger = createPinoLogger({
-  name: "multi-timeframe",
-  level: "info",
-});
+const logger = createLogger("xxx", "info");
 
 /**
  * 时间框架定义

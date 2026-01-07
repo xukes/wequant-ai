@@ -1,31 +1,17 @@
 import "./utils/fix-console";
 import "dotenv/config";
-import { createPinoLogger } from "@voltagent/logger";
 import { serve } from "@hono/node-server";
 import { createApiRoutes } from "./api/routes";
 import { initDatabase } from "./database/init";
 import { RISK_PARAMS } from "./config/riskParams";
 import { EngineManager } from "./scheduler/EngineManager"; // 引入新的管理器
+import { createLogger } from "./utils/logger";
 
 // 设置时区为中国时间（Asia/Shanghai，UTC+8）
 process.env.TZ = 'Asia/Shanghai';
 
-// 创建日志实例（使用中国时区）
-const logger = createPinoLogger({
-  name: "ai-btc",
-  level: "info",
-  formatters: {
-    timestamp: () => {
-      // 使用系统时区设置，已经是 Asia/Shanghai
-      const now = new Date();
-      // 正确格式化：使用 toLocaleString 获取中国时间，然后转换为 ISO 格式
-      const chinaOffset = 8 * 60; // 中国时区偏移（分钟）
-      const utc = now.getTime() + (now.getTimezoneOffset() * 60 * 1000);
-      const chinaTime = new Date(utc + (chinaOffset * 60 * 1000));
-      return `, "time": "${chinaTime.toISOString().replace('Z', '+08:00')}"`;
-    }
-  }
-});
+// 创建日志实例（输出到控制台 + 文件）
+const logger = createLogger("ai-btc", "info");
 
 // 全局服务器实例
 let server: any = null;

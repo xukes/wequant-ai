@@ -17,13 +17,10 @@
  */
 
 import { createClient } from "@libsql/client";
-import { createPinoLogger } from "@voltagent/logger";
+import { createLogger } from "../../utils/logger";
 import "dotenv/config";
 
-const logger = createPinoLogger({
-  name: "check-trades",
-  level: "info",
-});
+const logger = createLogger("xxx", "info");
 
 async function checkTrades() {
   try {

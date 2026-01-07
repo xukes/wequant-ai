@@ -21,7 +21,7 @@
  */
 import { Agent, Memory } from "@voltagent/core";
 import { LibSQLMemoryAdapter } from "@voltagent/libsql";
-import { createPinoLogger } from "@voltagent/logger";
+import { createLogger } from "../utils/logger";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { createTradingTools } from "../tools/trading";
 import { GateClient } from "../services/gateClient";
@@ -89,38 +89,38 @@ export interface AgentRequestConfig {
   riskParams: any;
 }
 
-/**
- * Create an agent instance dynamically based on request context
- */
-export function createDynamicAgent(config: AgentRequestConfig, gateClient: GateClient) {
-  // 1. Dynamic Model Selection
-  const openrouter = createOpenRouter({
-    apiKey: process.env.OPENROUTER_API_KEY || "",
-  });
+// /**
+//  * Create an agent instance dynamically based on request context
+//  */
+// export function createDynamicAgent(config: AgentRequestConfig, gateClient: GateClient) {
+//   // 1. Dynamic Model Selection
+//   const openrouter = createOpenRouter({
+//     apiKey: process.env.OPENROUTER_API_KEY || "",
+//   });
   
-  const model = openrouter.chat(config.modelName || "deepseek/deepseek-v3.2-exp");
+//   const model = openrouter.chat(config.modelName || "deepseek/deepseek-v3.2-exp");
 
-  // 2. Namespaced Memory
-  const memory = new Memory({
-    storage: new LibSQLMemoryAdapter({
-      url: "file:./.voltagent/trading-memory.db",
-      logger: logger.child({ component: "libsql" }),
-    }),
-    // namespace: `user_${config.userId}`,
-  });
+//   // 2. Namespaced Memory
+//   const memory = new Memory({
+//     storage: new LibSQLMemoryAdapter({
+//       url: "file:./.voltagent/trading-memory.db",
+//       logger: logger.child({ component: "libsql" }),
+//     }),
+//     // namespace: `user_${config.userId}`,
+//   });
 
-  // 3. Dynamic Instructions
-  // Use the existing generateInstructions to ensure consistency
-  const instructions = generateInstructions(config.strategy, 5);
+//   // 3. Dynamic Instructions
+//   // Use the existing generateInstructions to ensure consistency
+//   const instructions = generateInstructions(config.strategy, 5);
 
-  return new Agent({
-    name: `trading-agent-${config.userId}`,
-    model,
-    memory,
-    instructions,
-    tools: createTradingTools(gateClient),
-  });
-}
+//   return new Agent({
+//     name: `trading-agent-${config.userId}`,
+//     model,
+//     memory,
+//     instructions,
+//     tools: createTradingTools(gateClient),
+//   });
+// }
 
 
 /**
@@ -211,10 +211,7 @@ export function getStrategyParams(strategy: TradingStrategy): StrategyParams {
   return strategyConfigs[strategy];
 }
 
-const logger = createPinoLogger({
-  name: "trading-agent",
-  level: "info",
-});
+const logger = createLogger("trading-agent", "info");
 
 /**
  * 从环境变量读取交易策略
@@ -675,43 +672,43 @@ export function generateInstructions(strategy: TradingStrategy, intervalMinutes:
 /**
  * 创建交易 Agent
  */
-export function createTradingAgent(gateClient: GateClient, intervalMinutes: number = 5) {
-  const openrouter = createOpenRouter({
-    apiKey: process.env.OPENROUTER_API_KEY || "",
-  });
-
-//   const baseURL = process.env.CUSTOM_MODEL_BASE_URL || "http://localhost:11434/v1";
-//   const apiKey = process.env.CUSTOM_MODEL_API_KEY || "no-key";
-//   const modelName = process.env.AI_MODEL_NAME || "deepseek/deepseek-v3.2-exp";
-
-//   logger.info(`Initializing AI Model Provider: ${baseURL}`);
-//   logger.info(`Using Model: ${modelName}`);
-
-//  const customProvider = createOpenAI({
-//     baseURL: baseURL,
-//     apiKey: apiKey,
+// export function createTradingAgent(gateClient: GateClient, intervalMinutes: number = 5) {
+//   const openrouter = createOpenRouter({
+//     apiKey: process.env.OPENROUTER_API_KEY || "",
 //   });
 
+// //   const baseURL = process.env.CUSTOM_MODEL_BASE_URL || "http://localhost:11434/v1";
+// //   const apiKey = process.env.CUSTOM_MODEL_API_KEY || "no-key";
+// //   const modelName = process.env.AI_MODEL_NAME || "deepseek/deepseek-v3.2-exp";
 
-  const memory = new Memory({
-    storage: new LibSQLMemoryAdapter({
-      url: "file:./.voltagent/trading-memory.db",
-      logger: logger.child({ component: "libsql" }),
-    }),
-  });
+// //   logger.info(`Initializing AI Model Provider: ${baseURL}`);
+// //   logger.info(`Using Model: ${modelName}`);
+
+// //  const customProvider = createOpenAI({
+// //     baseURL: baseURL,
+// //     apiKey: apiKey,
+// //   });
+
+
+//   const memory = new Memory({
+//     storage: new LibSQLMemoryAdapter({
+//       url: "file:./.voltagent/trading-memory.db",
+//       logger: logger.child({ component: "libsql" }),
+//     }),
+//   });
   
-  // 获取当前策略
-  const strategy = getTradingStrategy();
-  logger.info(`使用交易策略: ${strategy}`);
+//   // 获取当前策略
+//   const strategy = getTradingStrategy();
+//   logger.info(`使用交易策略: ${strategy}`);
 
-  const agent = new Agent({
-    name: "trading-agent",
-    instructions: generateInstructions(strategy, intervalMinutes),
-    // model: customProvider.chat(modelName),
-    model: openrouter.chat(process.env.AI_MODEL_NAME || "deepseek/deepseek-v3.2-exp"),
-    tools: createTradingTools(gateClient),
-    memory,
-  });
+//   const agent = new Agent({
+//     name: "trading-agent",
+//     instructions: generateInstructions(strategy, intervalMinutes),
+//     // model: customProvider.chat(modelName),
+//     model: openrouter.chat(process.env.AI_MODEL_NAME || "deepseek/deepseek-v3.2-exp"),
+//     tools: createTradingTools(gateClient),
+//     memory,
+//   });
 
-  return agent;
-}
+//   return agent;
+// }

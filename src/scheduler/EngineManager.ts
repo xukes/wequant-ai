@@ -17,13 +17,10 @@
  */
 
 import { AgentRunner, EngineConfig } from "./AgentRunner";
-import { createPinoLogger } from "@voltagent/logger";
+import { createLogger } from "../utils/logger";
 import { GateApiLocal } from "../services/gateApiLocal";
 
-const logger = createPinoLogger({
-  name: "engine-manager",
-  level: "info",
-});
+const logger = createLogger("engine-manager", "info");
 
 // Use a default GateApiLocal instance for fetching engine configs.
 // The keys here are placeholders as we only need to access the public/internal backend APIs initially.

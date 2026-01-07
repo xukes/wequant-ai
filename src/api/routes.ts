@@ -22,14 +22,11 @@
 import { Hono } from "hono";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { createClient } from "@libsql/client";
-import { createPinoLogger } from "@voltagent/logger";
+import { createLogger } from "../utils/logger";
 import { EngineManager } from "../scheduler/EngineManager";
 import { GateApiLocal } from "../services/gateApiLocal";
 
-const logger = createPinoLogger({
-  name: "api-routes",
-  level: "info",
-});
+const logger = createLogger("api-routes", "info");
 
 const dbClient = createClient({
   url: process.env.DATABASE_URL || "file:./.voltagent/trading.db",
@@ -55,15 +52,6 @@ export function createApiRoutes() {
   // Health check endpoint
   app.get("/api/health", (c) => {
     return c.json({ status: "ok" }, 200);
-  });
-
-  // ====== Engine Management APIs ======
-
-  // 1. Create a new Quant Engine
-  // This should now be handled by the backend-base API directly, or we proxy it.
-  // For now, we will disable creation from this service as it doesn't own the DB table anymore.
-  app.post("/api/engines", async (c) => {
-    return c.json({ error: "Engine creation is now managed by the backend service." }, 400);
   });
 
   // 2. Start an Engine

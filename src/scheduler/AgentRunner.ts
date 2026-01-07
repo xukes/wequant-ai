@@ -17,7 +17,7 @@
  */
 
 import cron from "node-cron";
-import { createPinoLogger } from "@voltagent/logger";
+import { createLogger } from "../utils/logger";
 import { createClient } from "@libsql/client";
 import { GateClient } from "../services/gateClient";
 import { createTradingTools } from "../tools/trading/factory";
@@ -35,10 +35,7 @@ import {
 } from "../utils/indicators";
 import { getChinaTimeISO } from "../utils/timeUtils";
 
-const logger = createPinoLogger({
-  name: "agent-runner",
-  level: "info",
-});
+const logger = createLogger("agent-runner", "info");
 
 // Local DB client removed as quant_engines table is gone.
 // const dbClient = createClient({

@@ -1,19 +1,6 @@
 /**
  * open-nof1.ai - AI 加密货币自动交易系统
  * Copyright (C) 2025 195440
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
 /**
@@ -22,17 +9,14 @@
 import "dotenv/config";
 import { createClient } from "@libsql/client";
 import { CREATE_TABLES_SQL } from "./schema";
-import { createPinoLogger } from "@voltagent/logger";
+import { createLogger } from "../utils/logger";
 
-const logger = createPinoLogger({
-  name: "database-init",
-  level: "info",
-});
+const logger = createLogger("database-init", "info");
 
 async function initDatabase() {
   try {
     const dbUrl = process.env.DATABASE_URL || "file:./.voltagent/trading.db";
-    
+
     logger.info(`Initializing database: ${dbUrl}`);
 
     const client = createClient({
