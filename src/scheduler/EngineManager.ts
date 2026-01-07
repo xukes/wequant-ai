@@ -96,7 +96,7 @@ export class EngineManager {
       logger.info(`Engine ${engineId} started successfully.`);
 
     } catch (error: any) {
-      logger.error(error，`Failed to start engine ${engineId}:`);
+      logger.error(error, `Failed to start engine ${engineId}:`);
       throw error;
     }
   }
