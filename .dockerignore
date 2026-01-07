@@ -65,6 +65,6 @@ docs/
 .prettierrc
 .eslintrc*
 .github/
-scripts/
+# scripts/  # 需要保留，包含 run-with-utf8.js
 strategies/
 
