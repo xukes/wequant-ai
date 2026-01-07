@@ -24,14 +24,6 @@ jobs:
           SSH_PASSWORD: ${{ secrets.ALIYUN_SSH_PASSWORD }}
           SSH_PORT: ${{ secrets.ALIYUN_SSH_PORT || '22' }}
           DEPLOY_PATH: ${{ secrets.ALIYUN_DEPLOY_PATH || '/opt/nof1-trading' }}
-          # Environment Variables from Secrets
-          PORT: ${{ secrets.PORT || 3100 }}
-          GATE_API_KEY: ${{ secrets.GATE_API_KEY }}
-          GATE_API_SECRET: ${{ secrets.GATE_API_SECRET }}
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL || 'file:./.voltagent/trading.db' }}
-          TRADING_STRATEGY: ${{ secrets.TRADING_STRATEGY || 'balanced' }}
-          GATE_USE_TESTNET: ${{ secrets.GATE_USE_TESTNET || 'true' }}
         run: |
           # 1. 同步文件 (排除不需要的文件)
           sshpass -p "$SSH_PASSWORD" rsync -avz --delete \
@@ -61,26 +53,6 @@ jobs:
                 exit 1
             fi
             echo "✅ Using command: \$DOCKER_COMPOSE_CMD"
-
-            # 创建/更新 .env.production 文件 (供 Docker Compose 使用)
-            echo "Generating .env.production file..."
-            cat > .env.production << 'ENV_EOF'
-            PORT=${PORT}
-            NODE_ENV=production
-            GATE_API_KEY=${GATE_API_KEY}
-            GATE_API_SECRET=${GATE_API_SECRET}
-            OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-            DATABASE_URL=${DATABASE_URL}
-            TRADING_STRATEGY=${TRADING_STRATEGY}
-            GATE_USE_TESTNET=${GATE_USE_TESTNET}
-            # 其他默认配置
-            TRADING_INTERVAL_MINUTES=10
-            MAX_LEVERAGE=25
-            INITIAL_BALANCE=1000
-            ENV_EOF
-            
-            # 为了兼容性，也可以复制一份为 .env（如果脚本里硬编码了读取 .env）
-            cp .env.production .env
 
             # 确保数据目录存在
             mkdir -p voltagent-data logs
