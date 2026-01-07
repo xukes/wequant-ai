@@ -11,13 +11,13 @@ services:
     ports:
       - "${PORT:-3100}:3100"
     env_file:
-      - .env.production
+      - .env
     environment:
       - NODE_ENV=production
       - TZ=Asia/Shanghai
     volumes:
-      # 挂载环境变量文件到容器内，供启动脚本使用
-      - ./.env.production:/app/.env
+      # 挂载环境变量文件到容器内，供 tsx --env-file 使用
+      - ./.env:/app/.env
       # 生产环境数据持久化
       - ./voltagent-data:/app/.voltagent
       - ./logs:/app/logs
