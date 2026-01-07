@@ -64,15 +64,15 @@ jobs:
 
             # 创建/更新 .env.production 文件 (供 Docker Compose 使用)
             echo "Generating .env.production file..."
-            cat > .env.production << ENV_EOF
-            PORT=$PORT
+            cat > .env.production << 'ENV_EOF'
+            PORT=${PORT}
             NODE_ENV=production
-            GATE_API_KEY=$GATE_API_KEY
-            GATE_API_SECRET=$GATE_API_SECRET
-            OPENROUTER_API_KEY=$OPENROUTER_API_KEY
-            DATABASE_URL=$DATABASE_URL
-            TRADING_STRATEGY=$TRADING_STRATEGY
-            GATE_USE_TESTNET=$GATE_USE_TESTNET
+            GATE_API_KEY=${GATE_API_KEY}
+            GATE_API_SECRET=${GATE_API_SECRET}
+            OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+            DATABASE_URL=${DATABASE_URL}
+            TRADING_STRATEGY=${TRADING_STRATEGY}
+            GATE_USE_TESTNET=${GATE_USE_TESTNET}
             # 其他默认配置
             TRADING_INTERVAL_MINUTES=10
             MAX_LEVERAGE=25
