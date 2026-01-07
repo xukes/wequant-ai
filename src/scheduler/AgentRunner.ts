@@ -73,7 +73,7 @@ export class AgentRunner {
     this.config = config;
     
     // 获取配置的 URL
-    const backendBaseUrl = process.env.BACKEND_BASE_URL || "http://127.0.0.1:8998/api/v4";
+    const backendBaseUrl = process.env.BACKEND_BASE_URL || "http://172.17.0.1:8998/api/v4";
     // 实例化 GateClient，传入 URL
     this.gateClient = new GateClient(config.apiKey, config.apiSecret, backendBaseUrl);
 
