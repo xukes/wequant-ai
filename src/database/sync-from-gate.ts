@@ -22,7 +22,7 @@
 import "dotenv/config";
 import { createClient } from "@libsql/client";
 import { CREATE_TABLES_SQL } from "./schema";
-import { createLogger } from "../../utils/logger";
+import { createLogger } from "..//utils/logger";
 import { createGateClient } from "../services/gateClient";
 import * as fs from "node:fs";
 import * as path from "node:path";
