@@ -74,6 +74,9 @@ export class AgentRunner {
     
     // 获取配置的 URL
     const backendBaseUrl = process.env.BACKEND_BASE_URL || "";
+
+    logger.info(`Initializing AgentRunner for Engine backendBaseUrl ${backendBaseUrl}, ${config.id} - ${config.name}`);
+
     // 实例化 GateClient，传入 URL
     this.gateClient = new GateClient(config.apiKey, config.apiSecret, backendBaseUrl);
 
