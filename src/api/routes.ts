@@ -33,7 +33,7 @@ const dbClient = createClient({
 });
 
 // Use a default GateApiLocal instance for fetching engine configs.
-const backendApi = new GateApiLocal("system", "system", process.env.BACKEND_API_URL || "http://127.0.0.1:8998/api/v4");
+const backendApi = new GateApiLocal("system", "system", process.env.BACKEND_API_URL || "http://172.17.0.1:8998/api/v4");
 
 export function createApiRoutes() {
   const app = new Hono();
