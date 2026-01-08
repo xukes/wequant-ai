@@ -67,7 +67,7 @@ export const createGetTechnicalIndicatorsTool = (gateClient: GateClient) => crea
       const contract = `${symbol}_USDT`;
       const candles = await gateClient.getFuturesCandles(contract, interval, limit);
       
-      // Gate.io returns: [t, v, c, h, l, o] (time, volume, close, high, low, open)
+      // returns: [t, v, c, h, l, o] (time, volume, close, high, low, open)
       // We need to sort by time ascending for calculation
       const sortedCandles = candles.sort((a: any, b: any) => a.t - b.t);
       

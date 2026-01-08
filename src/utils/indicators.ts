@@ -132,7 +132,7 @@ export function calculateIndicators(candles: any[]) {
     };
   }
 
-  // 处理对象格式的K线数据（Gate.io API返回的是对象，不是数组）
+  // 处理对象格式的K线数据（API返回的是对象，不是数组）
   const closes = candles
     .map((c) => {
       // 如果是对象格式（FuturesCandlestick）

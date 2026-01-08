@@ -37,7 +37,6 @@
     "db:init": "bash scripts/init-db.sh",
     "db:reset": "tsx --env-file=.env ./src/database/reset.ts",
     "db:status": "bash scripts/db-status.sh",
-    "db:sync-positions": "bash scripts/sync-positions.sh",
     "db:migrate:peak-pnl": "tsx --env-file=.env ./src/database/add-peak-pnl-column.ts",
     "demo:calculate-pnl": "tsx ./scripts/calculate-pnl-demo.ts",
     "pm2:start": "pm2 start ecosystem.config.cjs --only open-nof1.ai",

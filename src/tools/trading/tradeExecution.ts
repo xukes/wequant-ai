@@ -53,7 +53,7 @@ export const createOpenPositionTool = (gateClient: GateClient) => createTool({
       const price = Number.parseFloat(ticker.last || "0");
       if (price <= 0) return { error: "无法获取有效市场价格" };
       
-      // 计算合约数量 (Gate.io合约通常以币为单位或张数为单位，这里简化假设为币的数量)
+      // 计算合约数量 (合约通常以币为单位或张数为单位，这里简化假设为币的数量)
       // 注意：实际生产环境需要根据合约面值精确计算
       // 假设 amount 是 USDT 金额，size = (amount * leverage) / price
       // 且需要取整到合约最小单位

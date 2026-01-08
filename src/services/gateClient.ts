@@ -17,7 +17,7 @@
  */
 
 /**
- * GATE.IO API Client Wrapper
+ * API Client Wrapper
  */
 // @ts-ignore - gate-api type definitions might be incomplete
 // import * as GateApi from "gate-api";
@@ -134,7 +134,7 @@ export class GateClient {
     
     for (let i = 0; i <= retries; i++) {
       try {
-        // Gate.io API call listPositions
+        // API call listPositions
         // Note: Not passing the second parameter means querying positions in all modes
         const result = await this.futuresApi.listPositions(this.settle);
         const allPositions = result.body;
@@ -194,7 +194,7 @@ export class GateClient {
       
       const absSize = Math.abs(params.size);
       
-      // Gate.io API single order size limit (based on error message)
+      // API single order size limit (based on error message)
       const API_MAX_SIZE = 10000000;
       
       // Check minimum size limit (using camelCase)
@@ -241,7 +241,7 @@ export class GateClient {
       }
 
       // Format price, ensure precision limit is not exceeded
-      // Gate.io API requires price precision not to exceed 12 decimal places
+      // API requires price precision not to exceed 12 decimal places
       // Note: price: "0" means market order
       const formatPrice = (price: number | undefined): string => {
         if (!price || price === 0) return "0";  // Market order
@@ -275,11 +275,11 @@ export class GateClient {
         order.tif = params.tif || "gtc";
       } else {
         // Market order: must set IOC (Immediate or Cancel) or FOK (Fill or Kill)
-        // Gate.io API requires market orders to specify IOC or FOK
+        // API requires market orders to specify IOC or FOK
         order.tif = "ioc"; // Immediate or Cancel
       }
 
-      // Gate API SDK uses camelCase: isReduceOnly -> is_reduce_only, isClose -> is_close
+      // SDK uses camelCase: isReduceOnly -> is_reduce_only, isClose -> is_close
       if (params.reduceOnly === true) {
         order.isReduceOnly = true;
         order.isClose = true;
@@ -456,7 +456,7 @@ export class GateClient {
         options.contract = contract;
       }
       
-      // Gate.io API: use getMyFuturesTrades method
+      // API: use getMyFuturesTrades method
       // Note: SDK method name might be getMyFuturesTrades instead of listMyTrades
       const result = await this.futuresApi.getMyFuturesTrades(
         this.settle,
@@ -482,7 +482,7 @@ export class GateClient {
         options.contract = contract;
       }
       
-      // Gate.io API: use listFuturesLiquidatedOrders method to get liquidated positions
+      // API: use listFuturesLiquidatedOrders method to get liquidated positions
       // Note: this method returns the history of liquidated (closed) positions
       const result = await this.futuresApi.listFuturesLiquidatedOrders(
         this.settle,
@@ -508,7 +508,7 @@ export class GateClient {
         options.contract = contract;
       }
       
-      // Gate.io API: use listFuturesSettlementHistory method to get settlement history
+      // API: use listFuturesSettlementHistory method to get settlement history
       const result = await this.futuresApi.listFuturesSettlementHistory(
         this.settle,
         options
