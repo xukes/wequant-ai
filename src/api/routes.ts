@@ -196,10 +196,6 @@ export function createApiRoutes() {
     }
   });
 
-  // 静态文件服务已移动到路由末尾，防止拦截 API 请求
-  // 静态文件服务 - 需要使用绝对路径 (放在最后)
-  app.use("/*", serveStatic({ root: "./public" }));
-
   return app;
 }
 
