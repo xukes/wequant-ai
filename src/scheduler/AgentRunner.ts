@@ -73,7 +73,7 @@ export class AgentRunner {
     this.config = config;
     
     // 获取配置的 URL
-    const backendBaseUrl = process.env.BACKEND_BASE_URL || "";
+    const backendBaseUrl = process.env.BACKEND_API_URL || "";
 
     logger.info(`Initializing AgentRunner for Engine backendBaseUrl ${backendBaseUrl}, ${config.id} - ${config.name}`);
 
