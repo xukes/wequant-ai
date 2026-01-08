@@ -234,17 +234,6 @@ export class AgentRunner {
   }
 
   /**
-   * Sync positions from Gate.io to database
-   * 注意：由于现在使用 backend-base，positions 数据不再存储在本地数据库
-   * 这个方法已废弃，保留接口以兼容性
-   */
-  private async syncPositionsFromGate(cachedPositions?: any[]) {
-    // Positions 数据现在直接从 backend-base 获取，无需同步到本地数据库
-    // 这个方法不再执行任何操作
-    return;
-  }
-
-  /**
    * Get formatted positions
    */
   private async getPositions(cachedGatePositions?: any[]) {
@@ -600,7 +589,6 @@ export class AgentRunner {
 
       // 4. Sync & Get Positions
       const rawGatePositions = await this.gateClient.getPositions();
-      await this.syncPositionsFromGate(rawGatePositions);
       let positions = await this.getPositions(rawGatePositions);
 
       // 5. Risk Management & Position Control
@@ -609,7 +597,6 @@ export class AgentRunner {
       if (positionsChanged) {
         // Refresh positions if any were closed
         const updatedRawPositions = await this.gateClient.getPositions();
-        await this.syncPositionsFromGate(updatedRawPositions);
         positions = await this.getPositions(updatedRawPositions);
       }
 
