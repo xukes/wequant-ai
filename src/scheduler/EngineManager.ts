@@ -47,6 +47,7 @@ export class EngineManager {
   public async init() {
     logger.info("Initializing Engine Manager...");
     try {
+      logger.info(`Fetching running engines from backend API...${process.env.BACKEND_API_URL}`);
       const { body } = await backendApi.futures.getQuantRunningEngines();
       const runningEngines = body.data || [];
       
