@@ -642,5 +642,5 @@ export function createGateClient(apiKey: string, apiSecret: string) {
     throw new Error("Gate API Key/Secret is required");
   }
   
-  return new GateClient(apiKey, apiSecret);
+  return new GateClient(apiKey, apiSecret, process.env.BACKEND_API_URL || "");
 }

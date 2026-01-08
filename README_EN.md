@@ -4,7 +4,6 @@
 
 [![VoltAgent](https://img.shields.io/badge/Framework-VoltAgent-purple.svg)](https://voltagent.dev)
 [![OpenRouter](https://img.shields.io/badge/AI-OpenRouter-orange.svg)](https://openrouter.ai)
-[![Gate.io](https://img.shields.io/badge/Exchange-Gate.io-00D4AA.svg)](https://www.gate.io)
 [![TypeScript](https://img.shields.io/badge/Language-TypeScript-3178C6.svg?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![Node.js](https://img.shields.io/badge/Runtime-Node.js%2020+-339933.svg?logo=node.js&logoColor=white)](https://nodejs.org)
 [![License](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](./LICENSE)
@@ -16,10 +15,6 @@
 </div>
 
 ## Overview
-
-open-nof1.ai is an AI-powered cryptocurrency automated trading system that deeply integrates large language model intelligence with quantitative trading practices. Built on an Agent framework, the system achieves truly intelligent trading by granting AI complete autonomy in market analysis and trading decisions.
-
-The system follows a **minimal human intervention** design philosophy, abandoning traditional hardcoded trading rules and allowing AI models to autonomously learn and make decisions based on raw market data. It integrates with Gate.io exchange (supporting both testnet and mainnet), provides complete perpetual contract trading capabilities, covers mainstream cryptocurrencies such as BTC, ETH, SOL, and supports full automation from data collection, intelligent analysis, risk management to trade execution.
 
 ![open-nof1.ai](./public/image.png)
 
@@ -57,7 +52,7 @@ The system follows a **minimal human intervention** design philosophy, abandonin
 └─────────┬───────────────────────────────────┬───────────┘
           │                                   │
 ┌─────────┴──────────┐            ┌───────────┴───────────┐
-│    Trading Tools   │            │   Gate.io API Client  │
+│    Trading Tools   │            │   API Client  │
 │                    │            │                       │
 │ - Market Data      │◄───────────┤ - Order Management    │
 │ - Account Info     │            │ - Position Query      │
@@ -79,7 +74,7 @@ The system follows a **minimal human intervention** design philosophy, abandonin
 |-----------|-----------|---------|
 | Framework | [VoltAgent](https://voltagent.dev) | AI Agent orchestration and management |
 | AI Provider | [OpenRouter](https://openrouter.ai) | Unified LLM API access (DeepSeek V3.2, Grok4, Claude, etc.) |
-| Exchange | [Gate.io](https://www.gate.io) | Cryptocurrency trading (testnet & mainnet) |
+| Exchange 
 | Database | LibSQL (SQLite) | Local data persistence |
 | Web Server | Hono | High-performance HTTP framework |
 | Language | TypeScript | Type-safe development |
@@ -103,14 +98,6 @@ The system follows a **minimal human intervention** design philosophy, abandonin
 - **Multi-Timeframe**: Aggregates data across multiple time windows
 - **Risk Management**: AI-controlled position sizing and leverage management
 
-### Complete Trading Functionality
-
-- **Supported Assets**: BTC, ETH, SOL, BNB, XRP, DOGE, GT, TRUMP, ADA, WLFI
-- **Contract Type**: USDT-settled perpetual futures
-- **Leverage Range**: 1x to 10x (configurable)
-- **Order Types**: Market orders, stop-loss, take-profit
-- **Position Direction**: Long and short positions
-- **Real-time Execution**: Sub-second order placement via Gate.io API
 
 ### Real-Time Monitoring Interface
 
@@ -175,19 +162,6 @@ INITIAL_BALANCE=2000            # Initial capital in USDT
 # Database
 DATABASE_URL=file:./.voltagent/trading.db
 
-# Gate.io API Credentials (use testnet first!)
-GATE_API_KEY=your_api_key_here
-GATE_API_SECRET=your_api_secret_here
-GATE_USE_TESTNET=true
-
-# AI Model Provider
-OPENROUTER_API_KEY=your_openrouter_key_here
-```
-
-**API Key Acquisition**:
-- OpenRouter: https://openrouter.ai/keys
-- Gate.io Testnet: https://www.gate.io/testnet
-- Gate.io Mainnet: https://www.gate.io/myaccount/api_key_manage
 
 ### Database Initialization
 
@@ -226,7 +200,6 @@ open-nof1.ai/
 │   ├── scheduler/
 │   │   └── tradingLoop.ts            # Trading cycle orchestration
 │   ├── services/
-│   │   ├── gateClient.ts             # Gate.io API client wrapper
 │   │   └── multiTimeframeAnalysis.ts # Multi-timeframe data aggregator
 │   ├── tools/
 │   │   └── trading/                  # VoltAgent tool implementations
@@ -254,21 +227,6 @@ open-nof1.ai/
 └── Dockerfile                        # Container build definition
 ```
 
-## Configuration
-
-### Environment Variables
-
-| Variable | Description | Default | Required |
-|----------|-------------|---------|----------|
-| `PORT` | HTTP server port | 3141 | No |
-| `TRADING_INTERVAL_MINUTES` | Trading loop interval in minutes | 5 | No |
-| `MAX_LEVERAGE` | Maximum leverage multiplier | 10 | No |
-| `INITIAL_BALANCE` | Initial capital in USDT | 2000 | No |
-| `DATABASE_URL` | SQLite database file path | file:./.voltagent/trading.db | No |
-| `GATE_API_KEY` | Gate.io API key | - | Yes |
-| `GATE_API_SECRET` | Gate.io API secret | - | Yes |
-| `GATE_USE_TESTNET` | Use testnet environment | true | No |
-| `OPENROUTER_API_KEY` | OpenRouter API key | - | Yes |
 
 ### AI Model Configuration
 
@@ -325,7 +283,6 @@ npm run db:reset
 # Check database status
 npm run db:status
 
-# Sync data from Gate.io
 npm run db:sync
 
 # Sync position data
@@ -691,8 +648,7 @@ npm run trading:start
 
 - [VoltAgent Documentation](https://voltagent.dev/docs/)
 - [OpenRouter Model Catalog](https://openrouter.ai/models)
-- [Gate.io API Reference](https://www.gate.io/docs/developers/apiv4/)
-- [Gate.io Testnet](https://www.gate.io/testnet)
+
 
 ## Risk Disclaimer
 
