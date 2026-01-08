@@ -20,7 +20,7 @@
  * 多时间框架分析模块（极简版 - 只提供原始数据）
  */
 
-import { createLogger } from "../../utils/logger";
+import { createLogger } from "../utils/logger";
 import { createGateClient } from "./gateClient";
 
 const logger = createLogger("xxx", "info");

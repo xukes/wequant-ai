@@ -34,7 +34,7 @@ export class GateClient {
   // private readonly spotApi: any;
   private readonly settle = "usdt"; // Use USDT settlement
 
-  constructor(apiKey: string, apiSecret: string, baseUrl: string = "http://172.17.0.1:8998/api/v4") {
+  constructor(apiKey: string, apiSecret: string, baseUrl: string) {
     // @ts-ignore
     this.client = new GateApiLocal(apiKey, apiSecret, baseUrl);
     // @ts-ignore
