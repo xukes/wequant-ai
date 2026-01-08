@@ -187,7 +187,7 @@ export function createApiRoutes() {
     const id = Number.parseInt(c.req.param("id"));
     try {
       const result = await dbClient.execute({
-        sql: "SELECT * FROM agent_decisions WHERE engine_id = ? ORDER BY timestamp DESC LIMIT 50",
+        sql: "SELECT * FROM agent_decisions WHERE engine_id = ? ORDER BY timestamp DESC LIMIT 5",
         args: [id]
       });
       return c.json({ data: result.rows });
