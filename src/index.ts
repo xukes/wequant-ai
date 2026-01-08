@@ -52,12 +52,12 @@ async function main() {
 
 // 错误处理
 process.on("uncaughtException", (error) => {
-  logger.error("Uncaught Exception:", error);
+  logger.error(`Uncaught Exception:${error}`);
   process.exit(1);
 });
 
 process.on("unhandledRejection", (reason: unknown) => {
-  logger.error("Unhandled Promise Rejection:", { reason });
+  logger.error(`Unhandled Promise Rejection:${reason}`);
 });
 
 // 优雅退出处理

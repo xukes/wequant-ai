@@ -38,7 +38,7 @@ function getDateString(): string {
  */
 export function createLogger(
   name: string,
-  level: string = "info"
+  level: pino.Level = "info"
 ): pino.Logger {
   const logDir = ensureLogDir();
   const dateStr = getDateString();
