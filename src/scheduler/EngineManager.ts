@@ -78,7 +78,7 @@ export class EngineManager {
       if (!engineData) {
         throw new Error(`Engine ${engineId} not found`);
       }
-      logger.info(`Starting engine ${engineId} with config:`, engineData);
+      logger.info(`Starting engine ${engineId} with config: ${JSON.stringify(engineData)} `);
       const config: EngineConfig = {
         id: engineData.id,
         name: engineData.name,

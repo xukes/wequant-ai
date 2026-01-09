@@ -35,7 +35,6 @@
 - src/database/check-trades.ts
 - src/database/close-and-reset.ts
 - src/database/reset.ts
-- src/database/sync-from-gate.ts
 - src/database/sync-positions-only.ts
 
 #### 服务模块

@@ -25,8 +25,6 @@
 ### 3. 数据库模块
 - `src/database/init.ts`
 - `src/database/reset.ts`
-- `src/database/sync-from-gate.ts`
-- `src/database/sync-positions-only.ts`
 - `src/database/close-and-reset.ts`
 - `src/database/check-trades.ts`
 - `src/database/add-fee-column.ts`

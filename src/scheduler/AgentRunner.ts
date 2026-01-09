@@ -34,6 +34,8 @@ import {
   ensureRange
 } from "../utils/indicators";
 import { getChinaTimeISO } from "../utils/timeUtils";
+import { createOpenAI } from "@ai-sdk/openai"; 
+
 
 const logger = createLogger("agent-runner", "info");
 
@@ -89,12 +91,28 @@ export class AgentRunner {
 
     logger.info(`Engine ${config.id} will trade symbols: ${this.SYMBOLS.join(", ")}`);
 
-    // 初始化 Agent
-    const openrouter = createOpenRouter({
-      apiKey: process.env.OPENROUTER_API_KEY || "",
-    });
+    // Determine whether to use local model or OpenRouter
+    const useLocalModel = process.env.USE_LOCAL_MODEL === 'true' ? true : false;
+    let model: any;
+    if (useLocalModel) {
+      const baseURL = process.env.CUSTOM_MODEL_BASE_URL || "http://http://10.9.0.4:11434/v1";
+      const apiKey = process.env.CUSTOM_MODEL_API_KEY || "no-key";
+      const modelName = process.env.AI_MODEL_NAME || "qwen2.5:7b";
+      const customProvider = createOpenAI({
+        baseURL: baseURL,
+        apiKey: apiKey,
+      });
+      model = customProvider.chat(modelName);
+    } else {
+      // 初始化 Agent
+      const openrouter = createOpenRouter({
+        apiKey: process.env.OPENROUTER_API_KEY || "",
+      });
+      model = openrouter.chat(config.modelName || "deepseek/deepseek-v3.2-exp");
+    }
 
-    const model = openrouter.chat(config.modelName || "deepseek/deepseek-v3.2-exp");
+   
+
 
     const memory = new Memory({
       storage: new LibSQLMemoryAdapter({
